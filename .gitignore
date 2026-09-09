@@ -9,3 +9,4 @@ dist/
 mac/**/xcuserdata/
 mac/**/DerivedData/
 mac/.build/
+mac/build/
