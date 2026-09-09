@@ -26,6 +26,7 @@ test('/v1/me returns user, default settings, dictionary and server info', async 
   assert.deepEqual(j.dictionary, [])
   assert.equal(j.server.version, 'test')
   assert.equal(typeof j.server.concurrency, 'number')
+  assert.deepEqual(j.server.allowedModels, ['gemma4', 'gpt-oss:120b', 'qwen3.5'])
   await app.close()
 })
 
@@ -37,6 +38,20 @@ test('settings round-trip and reject unknown values', async () => {
   assert.deepEqual(get.json(), { mode: 'literal', language: 'pt', hotkey: 'rightOption', llmModel: 'gpt-oss:120b' })
   const bad = await call('PUT', '/v1/settings', { mode: 'email', language: 'auto', hotkey: 'fn' })
   assert.equal(bad.statusCode, 400)
+  await app.close()
+})
+
+// I5: settings.llmModel used to accept any string, letting a client silently pick a
+// model the server was never configured to serve.
+test('PUT /v1/settings rejects an llmModel outside LLM_ALLOWED_MODELS, accepts one inside it', async () => {
+  const { app, call } = setup()
+  const bad = await call('PUT', '/v1/settings', { mode: 'clean', language: 'auto', hotkey: 'fn', llmModel: 'nope' })
+  assert.equal(bad.statusCode, 400)
+  assert.equal(bad.json().error, 'unknown_model')
+
+  const good = await call('PUT', '/v1/settings', { mode: 'clean', language: 'auto', hotkey: 'fn', llmModel: 'gpt-oss:120b' })
+  assert.equal(good.statusCode, 200)
+  assert.equal(good.json().llmModel, 'gpt-oss:120b')
   await app.close()
 })
 

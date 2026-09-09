@@ -16,6 +16,7 @@ function intOr(name: string, fallback: number): number {
   if (!v) return fallback
   const n = Number.parseInt(v, 10)
   if (!Number.isFinite(n)) throw new Error(`Environment variable ${name} must be an integer, got ${JSON.stringify(v)}`)
+  if (n < 1) throw new Error(`Environment variable ${name} must be >= 1, got ${JSON.stringify(v)}`)
   return n
 }
 
@@ -29,6 +30,12 @@ export const env = {
   llmConcurrency: () => intOr('LLM_CONCURRENCY', 5),
   // Ceiling for the per-request budget the Mac sends.
   llmMaxTimeoutMs: () => intOr('LLM_MAX_TIMEOUT_MS', 14000),
+  // Models a user is allowed to pick via PUT /v1/settings.llmModel. Comma-separated.
+  llmAllowedModels: (): string[] =>
+    (process.env.LLM_ALLOWED_MODELS ?? 'gemma4,gpt-oss:120b,qwen3.5')
+      .split(',')
+      .map((m) => m.trim())
+      .filter(Boolean),
   databasePath: () => process.env.DATABASE_PATH ?? './data/voice.db',
   port: () => intOr('PORT', 8080),
   /** Transcripts in logs are a dev-only aid; production refuses the flag outright. */

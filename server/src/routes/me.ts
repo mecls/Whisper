@@ -9,6 +9,6 @@ export function registerMe(app: FastifyInstance, deps: AppDeps): void {
     user: req.user,
     settings: getSettings(deps.db, req.user.id),
     dictionary: loadDictionary(deps.db, req.user.id),
-    server: { version: deps.version, model: env.llmModel(), concurrency: env.llmConcurrency() },
+    server: { version: deps.version, model: env.llmModel(), concurrency: env.llmConcurrency(), allowedModels: env.llmAllowedModels() },
   }))
 }

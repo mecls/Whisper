@@ -27,3 +27,25 @@ test('LOG_TRANSCRIPTS is refused in production', () => {
   process.env.LOG_TRANSCRIPTS = '0'
   assert.equal(env.logTranscripts(), false)
 })
+
+// Promoted minor: PORT, LLM_CONCURRENCY and LLM_MAX_TIMEOUT_MS must reject <1 so a
+// misconfigured prod .env (e.g. PORT=0) fails loudly at boot instead of producing a
+// nonsensical listener or a concurrency limit that admits no requests at all.
+test('intOr rejects values below 1 for PORT, LLM_CONCURRENCY and LLM_MAX_TIMEOUT_MS', () => {
+  try {
+    process.env.PORT = '0'
+    assert.throws(() => env.port(), /Environment variable PORT must be >= 1/)
+    process.env.PORT = '-3'
+    assert.throws(() => env.port(), /Environment variable PORT must be >= 1/)
+
+    process.env.LLM_CONCURRENCY = '0'
+    assert.throws(() => env.llmConcurrency(), /Environment variable LLM_CONCURRENCY must be >= 1/)
+
+    process.env.LLM_MAX_TIMEOUT_MS = '0'
+    assert.throws(() => env.llmMaxTimeoutMs(), /Environment variable LLM_MAX_TIMEOUT_MS must be >= 1/)
+  } finally {
+    delete process.env.PORT
+    delete process.env.LLM_CONCURRENCY
+    delete process.env.LLM_MAX_TIMEOUT_MS
+  }
+})
