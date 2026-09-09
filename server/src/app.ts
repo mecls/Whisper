@@ -9,6 +9,9 @@ import type { LlmCaller } from './llm/client.js'
 import type { Semaphore } from './llm/semaphore.js'
 import { registerRefine } from './routes/refine.js'
 import { registerDictations } from './routes/dictations.js'
+import { registerDictionary } from './routes/dictionary.js'
+import { registerMe } from './routes/me.js'
+import { registerSettings, getSettings } from './routes/settings.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -74,8 +77,14 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     reply.header('x-request-id', req.id)
   })
 
+  // Per-user llmModel override (settings) must be wired before refine reads it.
+  deps.settingsFor ??= (userId) => getSettings(deps.db, userId)
+
   registerRefine(app, deps)
   registerDictations(app, deps)
+  registerDictionary(app, deps)
+  registerMe(app, deps)
+  registerSettings(app, deps)
 
   // Cached per app instance: a probe never fires more than once per 60s and never
   // throws past this function, so /health always answers 200.
