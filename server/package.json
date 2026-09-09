@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts",
+    "test": "LOG_LEVEL=silent tsx --test test/*.test.ts",
     "migrate": "tsx src/db/migrate.ts",
     "users": "tsx src/cli/users.ts",
     "bench": "tsx src/cli/bench.ts"

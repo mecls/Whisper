@@ -18,7 +18,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     },
     bodyLimit: 64 * 1024,
     requestIdHeader: 'x-request-id',
-    disableRequestLogging: false,
   })
   app.setValidatorCompiler(validatorCompiler)
   app.setSerializerCompiler(serializerCompiler)
