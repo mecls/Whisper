@@ -51,7 +51,7 @@ open Voice.xcodeproj
 1. In Xcode, under Signing & Capabilities, set your team ID (or leave blank for ad-hoc).
 2. Press ⌘R to build and run.
 3. If prompted for Input Monitoring or Accessibility, grant it and the onboarding window will relaunch the app.
-4. Open Settings › Server and paste your device token (issued on the VPS).
+4. Open Settings › Server, paste your device token (issued on the VPS) → click **Save token** → click **Test connection** (the menu then shows your name).
 
 The app runs ad-hoc by default. If you have an Apple Developer account, set `VOICE_SIGN_IDENTITY="Apple Development"` before building so the permissions grant persists across rebuilds.
 
@@ -66,16 +66,22 @@ The app runs ad-hoc by default. If you have an Apple Developer account, set `VOI
 3. Move `Voice.app` to `/Applications`.
 4. Double-click to launch. macOS 15+ will show **"Voice cannot be opened because it is from an unidentified developer"** — click **"Open Anyway"** (System Settings › Privacy & Security if the button does not appear).
 5. Grant Input Monitoring and Accessibility when prompted (macOS will open System Settings).
-6. Return to the app, open **Settings › Server**, and paste your device token.
+6. Return to the app, open **Settings › Server**, paste your device token → click **Save token** → click **Test connection** (the menu then shows your name).
 
 ## First run
 
 On first launch, the app downloads WhisperKit's `large-v3-v20240930_turbo_632MB` model (~630 MB) to `~/Library/Application Support/Voice/models/`. This takes 4–5 minutes the first time and ~10 seconds on warm starts.
 
-To skip the download on a new Mac, copy the model folder from a colleague:
+To skip the download on a new Mac, transfer the model folder from a colleague via zip:
+
 ```bash
-cp -r ~/Library/Application Support/Voice/models ~/Library/Application\ Support/Voice/
+# on a Mac that already has the model:
+cd ~/Library/Application\ Support/Voice/models && zip -r ~/Desktop/voice-model.zip models
+# send voice-model.zip (AirDrop / Drive), then on the new Mac:
+mkdir -p ~/Library/Application\ Support/Voice/models && cd ~/Library/Application\ Support/Voice/models && unzip ~/Desktop/voice-model.zip
 ```
+
+The full model folder path is `~/Library/Application Support/Voice/models/models/argmaxinc/whisperkit-coreml/openai_whisper-large-v3-v20240930_turbo_632MB`.
 
 ## What the event tap sees
 
@@ -94,7 +100,7 @@ Tasks 1–8 below verify behavior that cannot be tested automatically. Run them 
 - [ ] 5. Server down → raw pasted with notice; server back → outbox replays; the DB shows one row per dictation with `fallback_reason=offline`.
 - [ ] 6. Invalid token → HUD message, badge, Settings opens on the Server tab.
 - [ ] 7. Two dictations back-to-back (second Fn while the first is "Cleaning…") paste in order.
-- [ ] 8. Numbers: log line per dictation shows `asrMs` and `llmMs`; ten dictations p50 within the ~2–3 s budget.
+- [ ] 8. Numbers: log line per dictation shows `asrMs` and `llmMs`; ten dictations p50 within the §1 budget (~2–3 s).
 
 **Second-Mac test:** once the checklist passes on one Mac, test the zipped app on a second teammate's Mac and verify the "Open Anyway" flow, permission prompts, and that both users appear in the server's user list with `last_used` timestamps.
 
@@ -105,7 +111,7 @@ See [deploy/VPS.md](deploy/VPS.md) for the full runbook: deployment, backup, rol
 **Issuing a token for a teammate:**
 
 ```bash
-ssh vps 'cd /opt/miraside/voice/deploy && \
+ssh -i ~/.ssh/<SSH_KEY> -o IdentitiesOnly=yes vps 'cd /opt/miraside/voice/deploy && \
   docker compose exec voice-api node dist/cli/users.js add "<name>" --label "<device>"'
 ```
 
