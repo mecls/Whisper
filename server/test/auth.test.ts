@@ -72,3 +72,58 @@ test('a scanner sending Bearer mv_invalid is 429-rate-limited after 30 failed au
   assert.deepEqual(responses[30]!.json(), { error: 'rate_limited', message: 'Too many failed authentications' })
   await app.close()
 })
+
+// C2: the failed-auth limiter used to be consulted BEFORE authentication, for every
+// request — so 30 unauthenticated scans from one IP locked out every real device
+// sharing that IP (NAT, VPN, office wifi) too, even with a perfectly valid token.
+test('a valid token is never blocked by the failed-auth limiter, even from a poisoned IP', async () => {
+  const db = openDb(':memory:')
+  const u = createUser(db, 'Miguel')
+  const token = issueToken(db, u.id, 'MacBook')
+  const app = buildApp({ db, llm: null as never, version: 'test' })
+  const invalid = () => app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: 'Bearer mv_invalid' } })
+  const valid = () => app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${token}` } })
+
+  for (let i = 0; i < 30; i++) assert.equal((await invalid()).statusCode, 401)
+
+  // the same IP, now presenting a real token: authentication succeeds and never
+  // touches the limiter, so it is not itself blocked by the 30 prior failures.
+  assert.equal((await valid()).statusCode, 200)
+
+  // ...but the 31st invalid attempt from that IP is still blocked — the valid
+  // request did not reset or otherwise interfere with the failure count.
+  assert.equal((await invalid()).statusCode, 429)
+
+  await app.close()
+})
+
+// C2: `Fastify({...})` set no `trustProxy`, so behind Traefik `req.ip` was always the
+// proxy's own container address — every client shared one failed-auth bucket.
+test('trustProxy honours X-Forwarded-For from the docker network, so the failed-auth limiter keys on the real client IP, not the shared loopback address', async () => {
+  const app = buildApp({ db: openDb(':memory:'), llm: null as never, version: 'test' })
+  const attempt = (xff: string) =>
+    app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: 'Bearer mv_invalid', 'x-forwarded-for': xff } })
+
+  for (let i = 0; i < 30; i++) assert.equal((await attempt('203.0.113.9')).statusCode, 401)
+  assert.equal((await attempt('203.0.113.9')).statusCode, 429) // that forwarded IP is now blocked
+
+  // A different forwarded IP is unaffected. Without `trustProxy`, every injected
+  // request resolves to the same loopback remoteAddress and this would be 429 too.
+  assert.equal((await attempt('203.0.113.10')).statusCode, 401)
+
+  await app.close()
+})
+
+// I2: an unbounded map of per-IP failure counters is a slow memory leak against a
+// distributed scanner that never repeats an address.
+test('FailedAuthLimiter prunes expired entries once the map grows past 10,000', () => {
+  const limiter = new FailedAuthLimiter(30, 1000)
+  for (let i = 0; i < 10_000; i++) limiter.record(`ip-${i}`, 0) // all windows start at t=0
+  assert.equal(limiter.size, 10_000)
+
+  // the 10,001st distinct IP, recorded once its own window (t=0) has since expired
+  // (nowMs=2000, windowMs=1000): the map is now over the sweep threshold, so every
+  // entry whose window has expired — all 10,000 of the earlier ones — gets dropped.
+  limiter.record('ip-10000', 2000)
+  assert.equal(limiter.size, 1)
+})

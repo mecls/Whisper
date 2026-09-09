@@ -37,10 +37,16 @@ export function revokeToken(db: Db, tokenId: string): void {
   db.update(deviceTokens).set({ revokedAt: now() }).where(eq(deviceTokens.id, tokenId)).run()
 }
 
-export function authenticate(db: Db, header: string | undefined, nowMs: number = now()): AuthResult {
+/** Extracts the raw `mv_...` token from an `Authorization: Bearer mv_...` header, or null. */
+export function parseBearer(header: string | undefined): string | null {
   const m = header?.match(/^Bearer\s+(mv_[A-Za-z0-9_-]+)$/)
-  if (!m) return { ok: false, error: 'missing_token' }
-  const hash = hashToken(m[1]!)
+  return m ? m[1]! : null
+}
+
+export function authenticate(db: Db, header: string | undefined, nowMs: number = now()): AuthResult {
+  const token = parseBearer(header)
+  if (!token) return { ok: false, error: 'missing_token' }
+  const hash = hashToken(token)
   const row = db
     .select({
       tokenId: deviceTokens.id, revokedAt: deviceTokens.revokedAt, lastUsedAt: deviceTokens.lastUsedAt,
@@ -87,8 +93,21 @@ export class FailedAuthLimiter {
     const entry = this.entries.get(ip)
     if (!entry || nowMs - entry.windowStart >= this.windowMs) {
       this.entries.set(ip, { count: 1, windowStart: nowMs })
-      return
+    } else {
+      entry.count += 1
     }
-    entry.count += 1
+    // Unbounded growth guard: a distributed scanner hitting many IPs would otherwise
+    // leak memory forever. Only sweep once the map gets large — this keeps the common
+    // case (few distinct IPs) allocation-free.
+    if (this.entries.size > 10_000) {
+      for (const [key, e] of this.entries) {
+        if (nowMs - e.windowStart >= this.windowMs) this.entries.delete(key)
+      }
+    }
+  }
+
+  /** Test/introspection only. */
+  get size(): number {
+    return this.entries.size
   }
 }
