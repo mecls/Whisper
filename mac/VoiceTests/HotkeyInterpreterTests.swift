@@ -1,0 +1,37 @@
+import XCTest
+@testable import Voice
+
+final class HotkeyInterpreterTests: XCTestCase {
+    func testFnHoldAndRelease() {
+        var i = HotkeyInterpreter(choice: .fn)
+        XCTAssertEqual(i.handle(.flags(fn: true, rightOption: false, rightCommand: false)), .press)
+        XCTAssertEqual(i.handle(.flags(fn: false, rightOption: false, rightCommand: false)), .release)
+    }
+
+    func testOtherKeyWhileHeldCancelsAndSwallowsTheRelease() {
+        var i = HotkeyInterpreter(choice: .fn)
+        _ = i.handle(.flags(fn: true, rightOption: false, rightCommand: false))
+        XCTAssertEqual(i.handle(.keyDown(96)), .cancel)           // F5
+        XCTAssertNil(i.handle(.flags(fn: false, rightOption: false, rightCommand: false)))
+        XCTAssertEqual(i.handle(.flags(fn: true, rightOption: false, rightCommand: false)), .press)
+    }
+
+    func testEscapeCancels() {
+        var i = HotkeyInterpreter(choice: .fn)
+        _ = i.handle(.flags(fn: true, rightOption: false, rightCommand: false))
+        XCTAssertEqual(i.handle(.keyDown(53)), .cancel)
+    }
+
+    func testKeysWhileIdleAreIgnored() {
+        var i = HotkeyInterpreter(choice: .fn)
+        XCTAssertNil(i.handle(.keyDown(0)))
+        XCTAssertNil(i.handle(.flags(fn: false, rightOption: true, rightCommand: false)))
+    }
+
+    func testRightOptionChoiceIgnoresFn() {
+        var i = HotkeyInterpreter(choice: .rightOption)
+        XCTAssertNil(i.handle(.flags(fn: true, rightOption: false, rightCommand: false)))
+        XCTAssertEqual(i.handle(.flags(fn: false, rightOption: true, rightCommand: false)), .press)
+        XCTAssertEqual(i.handle(.flags(fn: false, rightOption: false, rightCommand: false)), .release)
+    }
+}
