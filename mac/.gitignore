@@ -1,0 +1,4 @@
+Voice.xcodeproj/
+build/
+*.xcuserstate
+DerivedData/
