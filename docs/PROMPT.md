@@ -103,3 +103,51 @@ Consequences:
 Concurrency probe on `gpt-oss:120b`: 3 parallel → all ok, wall 1.2 s; **5 parallel → all ok, wall 1.15 s**, no rate-limit headers. The account tier allows at least 5 in flight, so `LLM_CONCURRENCY=5`.
 
 <!-- Task 8's bench (server/src/cli/bench.ts) appends its results table below this line. -->
+
+## Bench (2026-09-09)
+
+Live run of `server/src/cli/bench.ts` against Ollama Cloud: 20 fixtures
+(`server/src/cli/bench-fixtures.ts` — 6 pt-PT, 6 en, 3 mixed pt/en, 2 spoken
+commands, 1 question, 1 one-word, 1 spelled-out numbers) × the brief's
+MATRIX, sequential per model, then a 3- and 5-way concurrency probe on
+`gemma4`/`none`. 60 sequential requests total, zero 429s, zero retries
+needed.
+
+| model | reasoning | p50 | p95 | guard rejections | reasoning chars (avg) |
+|---|---|---|---|---|---|
+| `gemma4` | `none` | 563 ms | 1764 ms | 0/20 | 0 |
+| `gpt-oss:120b` | `low` | 703 ms | 1680 ms | 0/20 | 170 |
+| `qwen3.5` | `none` | 1176 ms | 1489 ms | 0/20 | 0 |
+
+concurrency 3: wall 598 ms, failures 0
+concurrency 5: wall 1008 ms, failures 0
+
+Observations (from the stderr per-fixture detail, `bench-detail.log`, not
+committed):
+
+- **No model answered or summarized.** The question fixture ("o que achas
+  disto") came back as a question from all three (gemma4/qwen3.5 left it
+  bare, gpt-oss added a `?`); none of the 60 responses invented content or
+  responded to the transcript instead of cleaning it.
+- **Number formatting split.** `gemma4` and `qwen3.5` both converted "vinte e
+  cinco euros às três e meia" → `"25 euros às 3:30"` (digits, per the
+  prompt); `gpt-oss:120b` left it as words, `"Vinte e cinco euros às três e
+  meia."` — a small prompt-compliance gap worth watching if gpt-oss is ever
+  promoted.
+- **Language stayed mixed** on all 3 mixed pt/en fixtures for all 3 models
+  (e.g. "...confirmou a entrega, but it might slip to Friday" kept its
+  English clause inside the Portuguese sentence rather than translating
+  either way), and both spoken commands ("nova linha", "new paragraph") were
+  honoured as a line break / blank line by every model.
+- **Reasoning overhead was mild, not decisive.** `gpt-oss:120b` at `low`
+  spent ~170 reasoning chars/request on average and landed at p50 703 ms —
+  1.25× gemma4, not the 1.5× threshold that would flag a concern.
+  `qwen3.5` emitted zero reasoning chars (matches the spike) but was still
+  the slowest of the three at p50 1176 ms (~2.1× gemma4), so the extra
+  latency there is model weight, not reasoning tokens.
+- **Concurrency confirmed the spike's finding**: 3 and 5 parallel
+  `gemma4`/`none` requests both completed with zero failures in ~0.6–1.0 s
+  wall time, no rate-limit headers, no timeouts — consistent with
+  `LLM_CONCURRENCY=5`.
+
+Default stays `gemma4` at `none`.
