@@ -63,3 +63,28 @@ ufw allows 22, 80, 443, 8642, 9119. Nothing needs opening. The ARwatches docs' "
 Consequences: **Caddy dropped**; `voice-api` joins `<proxy-network>` with Traefik labels; deploy dir `/opt/miraside/voice`; memory limit 512 MB is generous on 7.8 GB but keep it. The 2 vCPU figure makes the on-device Whisper decision final for this box.
 
 Known: a `speaches` container (`arwatches-speaches`, faster-whisper CPU) is defined in the ARwatches compose but was not running at audit time.
+
+### Post-deploy audit (2026-09-09)
+
+First deploy of `miraside-voice` (Task 10, commit `76e5cd5`), synced by rsync (no git remote
+yet) since DNS for `voice.miraside.co` wasn't live yet. `docker compose ps` showed `voice-api`
+healthy and `backup` up; in-network `GET /health` returned
+`{"ok":true,"version":"0.1.0","db":"ok","llm":"ok"}`. Port map afterwards, unchanged from the
+pre-deploy baseline apart from the two new voice containers (neither publishes a host port):
+
+```
+miraside-voice-backup-1                                  (no ports)
+miraside-voice-voice-api-1        8080/tcp
+miraside-openwa      127.0.0.1:2786->2785/tcp
+arwatches-worker      4000/tcp
+arwatches-openwa      127.0.0.1:2785->2785/tcp
+deal-pipeline                                              (no ports)
+<proxy-container>          0.0.0.0:80->80/tcp, [::]:80->80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp
+n8n-n8n-1              127.0.0.1:5678->5678/tcp
+```
+
+Traefik registered the router on first request, confirmed via
+`docker run --rm --network <proxy-network> curlimages/curl:8.10.1 -s http://<proxy-container>:8080/api/http/routers`:
+`"name":"voice@docker"`, `"rule":"Host(\`voice.miraside.co\`)"`, `"service":"voice"`. The
+router won't get a TLS cert until the Namecheap A record for `voice.miraside.co` exists and
+resolves (Ruling 3 in Task 10 — expected, not yet Miguel's turn at audit time).

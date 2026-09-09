@@ -1,0 +1,50 @@
+name: miraside-voice
+services:
+  voice-api:
+    build: ../server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/voice.db
+      PORT: "8080"
+    volumes:
+      - voice-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    networks: [default, edge]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: <proxy-network>
+      traefik.http.routers.voice.rule: Host(`voice.miraside.co`)
+      traefik.http.routers.voice.entrypoints: websecure
+      traefik.http.routers.voice.tls: "true"
+      traefik.http.routers.voice.tls.certresolver: mytlschallenge
+      traefik.http.services.voice.loadbalancer.server.port: "8080"
+
+  backup:
+    image: alpine:3.20
+    restart: unless-stopped
+    volumes:
+      - voice-data:/data
+      - ./backups:/backups
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    command: >
+      sh -c "apk add --no-cache sqlite >/dev/null &&
+      echo '0 3 * * * sqlite3 /data/voice.db \".backup /backups/voice-$$(date +%F).db\" && find /backups -name \"voice-*.db\" -mtime +14 -delete' > /etc/crontabs/root &&
+      crond -f -l 8"
+    networks: [default]
+
+volumes:
+  voice-data:
+networks:
+  default:
+  edge:
+    external: true
+    name: <proxy-network>
