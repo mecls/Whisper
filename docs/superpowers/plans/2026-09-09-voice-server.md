@@ -4,9 +4,9 @@
 
 **Goal:** A small HTTPS API on the VPS that authenticates Mac clients with device tokens, cleans raw dictation text through Ollama Cloud, and stores text-only history, settings and a dictionary in SQLite.
 
-**Architecture:** One Node 22 process (Fastify 5) behind Caddy, SQLite on a Docker volume, the `openai` SDK pointed at `https://ollama.com/v1`. Every route is a thin handler over three pure modules: `auth` (token → user), `llm/refine` (prompt + output guards, LLM injected), `db` (Drizzle over better-sqlite3). `buildApp(deps)` takes its dependencies so tests inject an in-memory DB and a fake LLM.
+**Architecture:** One Node 22 process (Fastify 5) behind the VPS's existing Traefik, SQLite on a Docker volume, the `openai` SDK pointed at `https://ollama.com/v1`. Every route is a thin handler over three pure modules: `auth` (token → user), `llm/refine` (prompt + output guards, LLM injected), `db` (Drizzle over better-sqlite3). `buildApp(deps)` takes its dependencies so tests inject an in-memory DB and a fake LLM.
 
-**Tech Stack:** Node ≥22.11, TypeScript 5.9 (strict, NodeNext ESM), Fastify 5.12 + fastify-type-provider-zod 7 + zod 4, better-sqlite3 13 + drizzle-orm 0.45, openai 7, pino 10, node:test via tsx. Docker (node:22-bookworm builder → node:22-bookworm-slim runtime), Caddy 2.
+**Tech Stack:** Node ≥22.11, TypeScript 5.9 (strict, NodeNext ESM), Fastify 5.12 + fastify-type-provider-zod 7 + zod 4, better-sqlite3 13 + drizzle-orm 0.45, openai 7, pino 10, node:test via tsx. Docker (node:22-bookworm builder → node:22-bookworm-slim runtime) behind the VPS's existing Traefik.
 
 **Spec:** `docs/PLAN.md` (sections 4, 5, 6, 7, 8 M0–M1, 9). Measurements: `docs/SPIKES.md`.
 
@@ -1987,10 +1987,12 @@ git commit -m "feat(server): model bench and recorded prompt/model decision"
 
 ---
 
-### Task 9: Dockerfile, compose, Caddy, backups, VPS runbook
+### Task 9: Dockerfile, compose behind the existing Traefik, backups, VPS runbook
 
 **Files:**
-- Create: `server/Dockerfile`, `server/.dockerignore`, `deploy/docker-compose.yml`, `deploy/Caddyfile`, `deploy/.env.example`, `deploy/VPS.md`
+- Create: `server/Dockerfile`, `server/.dockerignore`, `deploy/docker-compose.yml`, `deploy/.env.example`, `deploy/VPS.md`
+
+**VPS facts (docs/SPIKES.md, audited 2026-09-09):** Ubuntu 24.04, 2 vCPU / 7.8 GB, root shell. **Traefik already owns ports 80/443** (container `<proxy-container>`, docker provider, `exposedbydefault=false`, entrypoints `web` → redirects to `websecure`, cert resolver `mytlschallenge` via TLS-ALPN, network `<proxy-network>`). ufw already allows 80/443. The ARwatches ports are loopback-only. Miraside deployments live under `/opt/miraside/`. So: **no Caddy, no new ports; join `<proxy-network>` and route with labels.**
 
 - [ ] **Step 1: Write the Dockerfile**
 
@@ -2020,7 +2022,7 @@ CMD ["node", "dist/index.js"]
 
 `server/.dockerignore`: `node_modules`, `dist`, `data`, `.env*`, `test`.
 
-- [ ] **Step 2: Write compose and Caddyfile**
+- [ ] **Step 2: Write the compose file**
 
 `deploy/docker-compose.yml`:
 ```yaml
@@ -2039,20 +2041,15 @@ services:
       resources:
         limits:
           memory: 512M
-    networks: [voice]
-
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on: [voice-api]
-    networks: [voice]
+    networks: [default, edge]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: <proxy-network>
+      traefik.http.routers.voice.rule: Host(`voice.miraside.co`)
+      traefik.http.routers.voice.entrypoints: websecure
+      traefik.http.routers.voice.tls: "true"
+      traefik.http.routers.voice.tls.certresolver: mytlschallenge
+      traefik.http.services.voice.loadbalancer.server.port: "8080"
 
   backup:
     image: alpine:3.20
@@ -2064,23 +2061,18 @@ services:
       sh -c "apk add --no-cache sqlite >/dev/null &&
       echo '0 3 * * * sqlite3 /data/voice.db \".backup /backups/voice-$$(date +%F).db\" && find /backups -name \"voice-*.db\" -mtime +14 -delete' > /etc/crontabs/root &&
       crond -f -l 8"
-    networks: [voice]
+    networks: [default]
 
 volumes:
   voice-data:
-  caddy-data:
-  caddy-config:
 networks:
-  voice:
+  default:
+  edge:
+    external: true
+    name: <proxy-network>
 ```
 
-`deploy/Caddyfile`:
-```
-voice.miraside.co {
-	encode zstd gzip
-	reverse_proxy voice-api:8080
-}
-```
+The `web` entrypoint already redirects every HTTP request to HTTPS at the Traefik level, so the router only needs `websecure`. Traefik requests the certificate on first request once DNS resolves to the box.
 
 `deploy/.env.example`: the same keys as `server/.env.example` minus `DATABASE_PATH`/`PORT` (set by compose).
 
@@ -2090,44 +2082,44 @@ Run:
 ```bash
 cd server && docker build -t miraside-voice-api:dev . && docker run --rm -d --name voice-smoke -e LLM_API_KEY=x -e DATABASE_PATH=/data/voice.db -p 18080:8080 miraside-voice-api:dev && sleep 3 && curl -s localhost:18080/health && docker exec voice-smoke node dist/cli/users.js add Smoke && docker rm -f voice-smoke
 ```
-Expected: `{"ok":true,...,"db":"ok","llm":"degraded"}`, a token line from the CLI inside the container.
+Expected: `{"ok":true,...,"db":"ok","llm":"degraded"}`, a token line from the CLI inside the container. Also `docker compose -f deploy/docker-compose.yml config` must render (it needs `<proxy-network>` to exist only at `up` time, not at `config` time).
 
 - [ ] **Step 4: Write `deploy/VPS.md`**
 
 Sections, each a copy-pasteable block:
-1. **Port audit (before opening anything).** `docker ps --format '{{.Names}}\t{{.Ports}}'` — every ARwatches port must read `127.0.0.1:…`. Docker bypasses ufw; anything on `0.0.0.0` is already public the moment the provider firewall opens.
-2. **DNS.** Namecheap → `voice` A record → VPS IP (no wildcard exists). Wait for `dig +short voice.miraside.co`.
-3. **Firewall.** Provider panel: allow TCP 80, 443. Then `sudo ufw allow 80,443/tcp`.
-4. **Deploy.** `git clone git@github.com:<org>/miraside-voice.git && cd miraside-voice/deploy && cp .env.example .env && $EDITOR .env && mkdir -p backups && docker compose up -d --build && docker compose ps`.
-5. **Verify.** `curl -s https://voice.miraside.co/health`; `docker compose logs -f voice-api`.
+1. **Access.** `ssh -i ~/.ssh/<SSH_KEY> -o IdentitiesOnly=yes vps` (root shell). Nothing to open: Traefik already listens on 80/443 and ufw allows them.
+2. **Port audit (sanity, every deploy).** `docker ps --format '{{.Names}}\t{{.Ports}}'` — only `<proxy-container>` may show `0.0.0.0`. Docker bypasses ufw, so anything else on `0.0.0.0` is already public.
+3. **DNS.** Namecheap → `voice` A record → `<VPS_IP>` (no wildcard exists). Wait for `dig +short voice.miraside.co`.
+4. **Deploy.** `mkdir -p /opt/miraside && cd /opt/miraside && git clone git@github.com:<org>/miraside-voice.git voice && cd voice/deploy && cp .env.example .env && $EDITOR .env && mkdir -p backups && docker compose up -d --build && docker compose ps`.
+5. **Verify.** `curl -s https://voice.miraside.co/health`; `docker compose logs -f voice-api`; certificate issuance in `docker logs <proxy-container> --since 5m | grep -i voice`.
 6. **Users.** `docker compose exec voice-api node dist/cli/users.js add "Miguel" --label MacBook` (token shown once), `… list`, `… revoke <tokenId>`.
 7. **Update.** `git pull && docker compose up -d --build`. **Rollback.** `git checkout <sha> && docker compose up -d --build`.
 8. **Backups.** nightly in `deploy/backups/`, 14 kept. **Restore.** `docker compose stop voice-api && docker run --rm -v miraside-voice_voice-data:/data -v $PWD/backups:/b alpine cp /b/voice-YYYY-MM-DD.db /data/voice.db && docker compose start voice-api`.
-9. **If the box has no public IP.** Cloudflare Tunnel instead of Caddy: remove the `caddy` service, add `cloudflared` with a token, point the tunnel at `voice-api:8080` (requires moving `miraside.co` DNS to Cloudflare or delegating the subdomain).
+9. **Do not touch** `/docker/n8n` (Traefik + n8n), `/root/ARwatches` or `/opt/miraside/demos` — other projects share the box.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add server/Dockerfile server/.dockerignore deploy
-git commit -m "feat(deploy): Dockerfile, compose with Caddy and nightly backups, VPS runbook"
+git commit -m "feat(deploy): Dockerfile, compose behind the shared Traefik, nightly backups, VPS runbook"
 ```
 
 ---
 
 ### Task 10: First deploy to the VPS (M0 acceptance)
 
-**Blocked on Miguel:** SSH access for this machine (`ssh vps` currently answers `Permission denied (publickey)`), the Namecheap A record for the chosen subdomain, and the provider firewall for 80/443.
+**Blocked on Miguel:** the Namecheap A record `voice.miraside.co → <VPS_IP>`. SSH works with `~/.ssh/<SSH_KEY>`.
 
 - [ ] **Step 1:** Follow `deploy/VPS.md` §1–§5.
 - [ ] **Step 2:** `curl -s https://voice.miraside.co/health` → `{"ok":true,"db":"ok","llm":"ok"}`.
 - [ ] **Step 3:** Issue Miguel's token (§6) and store it in the password manager for the Mac Settings › Server tab.
-- [ ] **Step 4:** `docker ps` shows both compose projects; ARwatches containers untouched.
-- [ ] **Step 5:** Update `docs/SPIKES.md` VPS section with the actual specs (`nproc`, `free -h`) and the port audit output.
+- [ ] **Step 4:** `docker ps` shows the arwatches, n8n, deal-pipeline and miraside-voice projects; nothing else changed.
+- [ ] **Step 5:** Update `docs/SPIKES.md` VPS section with the post-deploy port audit output.
 
 ---
 
 ## Self-review
 
-- **Spec coverage:** §4.1 schema (Task 2), §4.2 auth + rate limit (Task 3), §4.3 refine incl. token cap, semaphore, think strip, guards, noise, bench (Tasks 4, 5, 8), §4.4 all routes (Tasks 6, 7), §4.5 logging (Task 6: metadata only, transcripts only under the dev flag), §4.6 env (Task 1), §5 deployment (Tasks 9, 10), §6 fallback enum (Task 2 schema + Task 6), §7 server-side security (Tasks 3, 9).
+- **Spec coverage:** §4.1 schema (Task 2), §4.2 auth + rate limit (Task 3), §4.3 refine incl. token cap, semaphore, think strip, guards, noise, bench (Tasks 4, 5, 8), §4.4 all routes (Tasks 6, 7), §4.5 logging (Task 6: metadata only, transcripts only under the dev flag), §4.6 env (Task 1), §5 deployment as revised for the existing Traefik (Tasks 9, 10), §6 fallback enum (Task 2 schema + Task 6), §7 server-side security (Tasks 3, 9).
 - **Placeholders:** none; the one deliberately flagged assert in Task 2 Step 1 is spelled out.
 - **Type consistency:** `LlmCaller`/`LlmRequest`/`LlmResponse` (Task 4) are what Tasks 5–8 consume; `FallbackReason`/`Injected` come from `db/schema.ts`; `upsertDictation` is used identically in Tasks 6 and 7; `AppDeps` grows in Task 6 and is final there.

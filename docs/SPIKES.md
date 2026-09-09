@@ -46,6 +46,20 @@ Consequences:
 
 ## Event tap under secure input (pending — needs a permission grant, run by Miguel)
 
-## VPS (pending — SSH from this session was refused: `claude@<VPS_IP>: Permission denied (publickey)`)
+## VPS (2026-09-09, `ssh -i ~/.ssh/<SSH_KEY> vps`)
 
-Known from the ARwatches docs without SSH: the two published ports are `127.0.0.1` only (`docker/README.md`: "Não é preciso abrir portas"), the box is described as 4 vCPU / 8 GB in `docs/ENVIRONMENTS.md` §6, `miraside.co` DNS is on Namecheap with no wildcard (each subdomain is a manual record), and a `speaches` (faster-whisper, CPU) container already runs there as `arwatches-speaches` — a ready target for the future remote ASR provider.
+`vps` = <VPS_IP>, Ubuntu 24.04.4, **2 vCPU / 7.8 GB RAM** (not the 4 vCPU / 16 GB assumed during planning), 73 GB free, Docker 29.4, root shell, passwordless sudo.
+
+| container | ports | note |
+|---|---|---|
+| `<proxy-container>` | `0.0.0.0:80`, `0.0.0.0:443` | **the public reverse proxy** — docker provider, `exposedbydefault=false`, entrypoints `web` (redirects to https) / `websecure`, certresolver `mytlschallenge` (TLS-ALPN), network `<proxy-network>` |
+| `n8n-n8n-1` | `127.0.0.1:5678` | routed as `n8n.miraside.co` via labels |
+| `arwatches-openwa` | `127.0.0.1:2785` | loopback only, as its README says |
+| `arwatches-worker` | exposed 4000 only | not published |
+| `deal-pipeline` | none | `/opt/miraside/demos/deal-pipeline` |
+
+ufw allows 22, 80, 443, 8642, 9119. Nothing needs opening. The ARwatches docs' "no inbound path" describes the ARwatches containers, not the box.
+
+Consequences: **Caddy dropped**; `voice-api` joins `<proxy-network>` with Traefik labels; deploy dir `/opt/miraside/voice`; memory limit 512 MB is generous on 7.8 GB but keep it. The 2 vCPU figure makes the on-device Whisper decision final for this box.
+
+Known: a `speaches` container (`arwatches-speaches`, faster-whisper CPU) is defined in the ARwatches compose but was not running at audit time.

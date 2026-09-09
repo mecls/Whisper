@@ -17,7 +17,7 @@ Decisions confirmed with Miguel in this session:
 | LLM | Ollama Cloud, house path (`openai` SDK → `https://ollama.com/v1`), default `gpt-oss:120b` at `reasoning_effort: low`, to be confirmed by the bench |
 | Users | Small Miraside team; per-person device tokens issued by a CLI; no login UI in v1 |
 | Storage | VPS keeps text only (raw + cleaned transcripts, settings, dictionary, usage); audio discarded immediately, never written to disk anywhere |
-| Hosting | Same VPS as ARwatches, new Caddy reverse proxy + subdomain (`voice.miraside.co` assumed; confirm) |
+| Hosting | Same VPS as ARwatches, behind its existing Traefik (audited), subdomain `voice.miraside.co` (confirmed) |
 | Apple account | None (personal Xcode). Apple-Development signing in v1; notarization + auto-update is a later milestone |
 | Location | `hub/miraside-voice/` (kebab-case like `miraside-dashboard`, `convex-backend`), its own git repo like every hub app |
 
@@ -45,7 +45,7 @@ Verified environment: macOS 26.5, Apple M2, Xcode 26.6, Node 22.11, Ollama.app a
 └─────────────────────────────────────────────────────────────────────────────┼──────────────┘
                                                                               │ text only
 ┌──────────────────────────── VPS (docker compose) ────────────────────────────┼──────────────┐
-│  Caddy (TLS, voice.miraside.co) ─► voice-api (Node 22 + Fastify)             ▼              │
+│  Traefik (existing, TLS, voice.miraside.co) ─► voice-api (Node 22 + Fastify) ▼              │
 │      auth (bearer device tokens) · /v1/refine · /v1/me · /v1/dictations · /v1/dictionary   │
 │      SQLite (WAL) on a volume · LLM semaphore    Ollama Cloud (https://ollama.com/v1)      │
 └────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -284,11 +284,12 @@ LOG_TRANSCRIPTS=0               # refused in production
 
 ## 5. Deployment (`deploy/`)
 
-- **Port audit first** **(review)**: Docker publishes ports through its own iptables chain and **bypasses `ufw`**, so "allow 80,443" does not limit what the box exposes. Before opening anything: `docker ps --format '{{.Names}} {{.Ports}}'` on the ARwatches project and rebind anything published on `0.0.0.0` to `127.0.0.1` (the WhatsApp gateway is loopback-only by design; verify). Then open 80/443 in the **provider's firewall** as well as ufw. If "no inbound path" turns out to be provider NAT or no public IP, Let's Encrypt issuance cannot work: switch to **Cloudflare Tunnel** (or Tailscale Funnel) — zero listening ports, free, and Caddy is then unnecessary. This decision is M0's first task.
-- **Compose project `miraside-voice`**, its own network, never touching the ARwatches compose files. Services: `voice-api` (built from `server/Dockerfile`, `node:22-bookworm-slim` multi-stage; volume `voice-data:/data`; healthcheck `node -e "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1))"` because the slim image has no curl; `restart: unless-stopped`; memory limit 512 MB), `caddy` (`caddy:2`, ports 80/443, volumes for data/config), `backup` (alpine + sqlite3, cron `0 3 * * *` → `sqlite3 /data/voice.db ".backup /backups/voice-$$(date +%F).db"` — double `$$` inside compose YAML — keep 14).
-- **Caddyfile:** `voice.miraside.co { encode zstd gzip; reverse_proxy voice-api:8080 }`. Caddy handles Let's Encrypt.
-- **VPS.md steps:** port audit → DNS A record → provider + ufw firewall → clone → `.env` → `docker compose up -d --build` → `docker compose exec voice-api node dist/cli/users.js add "Miguel" --label "MacBook"` → token → `curl https://voice.miraside.co/health`. Rollback = `git checkout <prev> && docker compose up -d --build`. Restore = stop, copy backup over `voice.db`, start.
-- Deploy is manual (`ssh` + `git pull` + `compose up --build`) in v1; a GitHub Action over SSH is roadmap.
+**Audited 2026-09-09 (docs/SPIKES.md):** the VPS is Ubuntu 24.04, **2 vCPU / 7.8 GB**, root shell, and it already has a public reverse proxy: **Traefik** (`<proxy-container>`, docker provider, `exposedbydefault=false`, entrypoints `web`→`websecure`, cert resolver `mytlschallenge`, network `<proxy-network>`) owns 80/443 and ufw already allows them. ARwatches publishes only on `127.0.0.1`. Miraside deployments live under `/opt/miraside/`.
+
+- **No Caddy, no new ports.** `voice-api` joins the external `<proxy-network>` network and carries Traefik labels (`Host(\`voice.miraside.co\`)`, `websecure`, `tls.certresolver=mytlschallenge`, service port 8080). Traefik issues the certificate on first request once the Namecheap A record `voice → <VPS_IP>` resolves.
+- **Compose project `miraside-voice`** at `/opt/miraside/voice/deploy`, its own default network plus `edge` (= `<proxy-network>`), never touching the n8n, ARwatches or deal-pipeline compose files. Services: `voice-api` (built from `server/Dockerfile`, `node:22-bookworm` builder → `node:22-bookworm-slim` runtime; volume `voice-data:/data`; healthcheck `node -e "fetch('http://127.0.0.1:8080/health')…"` because the slim image has no curl; `restart: unless-stopped`; memory limit 512 MB on a 7.8 GB box), `backup` (alpine + sqlite3, cron `0 3 * * *` → `sqlite3 /data/voice.db ".backup /backups/voice-$$(date +%F).db"` — double `$$` inside compose YAML — keep 14).
+- **VPS.md steps:** DNS A record → `git clone` into `/opt/miraside/voice` → `.env` → `docker compose up -d --build` → `docker compose exec voice-api node dist/cli/users.js add "Miguel" --label "MacBook"` → token → `curl https://voice.miraside.co/health`. Rollback = `git checkout <prev> && docker compose up -d --build`. Restore = stop, copy backup over `voice.db`, start. Port audit (`docker ps --format '{{.Names}}\t{{.Ports}}'`, only Traefik on `0.0.0.0`) on every deploy, because Docker bypasses ufw.
+- Deploy is manual (`ssh -i ~/.ssh/<SSH_KEY> vps`, `git pull`, `compose up --build`) in v1; a GitHub Action over SSH is roadmap.
 
 ---
 
@@ -325,7 +326,7 @@ Retries: none on `/v1/refine` (latency budget), one retry with backoff on outbox
 - The event tap never listens to keystrokes while idle (§3.2); README states it.
 - Clipboard writes are `.currentHostOnly` so Universal Clipboard never carries a transcript to another device; the HUD text flash is a setting.
 - Server: body limit 64 KB, rate limit by token hash + per-IP on 401s, helmet headers, no CORS (no browser client in v1), tokens hashed, no transcript logging in production.
-- VPS: only 80/443 reachable after the port audit; Caddy is the only listener; `voice-api` binds to the compose network, not the host.
+- VPS: only Traefik listens on 80/443 (already the case); `voice-api` binds to the compose networks, never the host; the port audit runs on every deploy because Docker bypasses ufw.
 - Secure-input detection prevents pasting into password fields.
 
 ---
