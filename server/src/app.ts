@@ -2,9 +2,10 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import helmet from '@fastify/helmet'
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod'
 import { env } from './env.js'
+import type { Db } from './db/client.js'
 
 export interface AppDeps {
-  db: unknown
+  db: Db
   llm: unknown
   version: string
 }
@@ -26,12 +27,20 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     reply.header('x-request-id', req.id)
   })
 
-  app.withTypeProvider<ZodTypeProvider>().get('/health', async () => ({
-    ok: true,
-    version: deps.version,
-    db: 'ok',
-    llm: 'unknown',
-  }))
+  app.withTypeProvider<ZodTypeProvider>().get('/health', async () => {
+    let db: 'ok' | 'error' = 'ok'
+    try {
+      deps.db.raw.prepare('select 1').get()
+    } catch {
+      db = 'error'
+    }
+    return {
+      ok: true,
+      version: deps.version,
+      db,
+      llm: 'unknown',
+    }
+  })
 
   return app
 }

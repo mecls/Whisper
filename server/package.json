@@ -6,7 +6,7 @@
   "engines": { "node": ">=22.11" },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && cp -R src/db/migrations dist/db/migrations",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "LOG_LEVEL=silent tsx --test test/*.test.ts",
