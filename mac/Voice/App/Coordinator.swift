@@ -27,7 +27,7 @@ final class Coordinator: ObservableObject {
     private var hideWork: DispatchWorkItem?
     private var panelShown = false   // separates "update" (levels/state can change any time) from "reveal"
 
-    var transcriber: Transcriber = FixedTextTranscriber()    // replaced in Task 7
+    var transcriber: Transcriber = WhisperKitTranscriber(modelId: Preferences.modelId)
     var refiner: Refiner = PassthroughRefiner()               // replaced in Task 8
 
     func start() {
@@ -158,7 +158,8 @@ final class Coordinator: ObservableObject {
     }
 }
 
-// Task 6 stubs, replaced in Tasks 7 and 8.
+// Task 6 stub. Superseded by WhisperKitTranscriber (Task 7) as the Coordinator's default, but kept
+// for tests/dev that want a deterministic, instant Transcriber.
 struct FixedTextTranscriber: Transcriber {
     var isReady: Bool { true }
     func prepare(progress: @escaping (Double) -> Void) async throws {}

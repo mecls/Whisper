@@ -64,7 +64,7 @@ targets:
   VoiceTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [VoiceTests]
+    sources: [VoiceTests, { path: Fixtures, type: folder, buildPhase: resources }]
     dependencies:
       - target: Voice
     settings:
@@ -91,3 +91,11 @@ schemes:
     test:
       config: Debug
       targets: [VoiceTests]
+      # VoiceTests is TEST_HOST-launched inside Voice.app, so it does not inherit the invoking
+      # shell's environment (macOS-specific: unlike a standalone xctest process, an app host launch
+      # does not pick up the parent process's env). This passthrough forwards VOICE_ASR_TESTS from
+      # xcodebuild's own environment (itself inherited from the shell) as an explicit launch env var,
+      # so `VOICE_ASR_TESTS=1 xcodebuild test …` reaches ProcessInfo.processInfo.environment in the
+      # opt-in WhisperKitTranscriberTests. Resolves to empty when unset, so the test still skips.
+      environmentVariables:
+        VOICE_ASR_TESTS: "$(VOICE_ASR_TESTS)"
