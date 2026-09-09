@@ -12,14 +12,27 @@ final class ModelManager {
     }()
     static let repo = "argmaxinc/whisperkit-coreml"
     static let available: [(id: String, label: String)] = [
-        ("large-v3-v20240930_turbo_632MB", "Large v3 Turbo (compressed, 630 MB) — recommended"),
-        ("large-v3-v20240930_turbo", "Large v3 Turbo (full, ~1.5 GB) — maximum accuracy"),
+        ("large-v3-v20240930_turbo_632MB", Strings.modelLabelTurbo),
+        ("large-v3-v20240930_turbo", Strings.modelLabelLarge),
     ]
+    /// Entries a model folder must contain to count as fully downloaded. `TextDecoderContextPrefill.mlmodelc`
+    /// and `generation_config.json` are variant-dependent, so they are deliberately not required here.
+    static let requiredEntries = ["config.json", "MelSpectrogram.mlmodelc", "AudioEncoder.mlmodelc", "TextDecoder.mlmodelc"]
 
-    func folder(for id: String) -> URL {
-        Self.modelsDir.appendingPathComponent("models/\(Self.repo)/openai_whisper-\(id)")  // layout observed in docs/SPIKES.md
+    /// `base` defaults to the production models directory; overridable so tests can point at a temp directory.
+    func folder(for id: String, base: URL = ModelManager.modelsDir) -> URL {
+        base.appendingPathComponent("models/\(Self.repo)/openai_whisper-\(id)")  // layout observed in docs/SPIKES.md
     }
-    func isDownloaded(_ id: String) -> Bool { FileManager.default.fileExists(atPath: folder(for: id).path) }
+
+    /// True only when the folder exists and contains every entry in `requiredEntries` — a bare, empty,
+    /// or partially-written folder (e.g. an interrupted download) must not be reported as downloaded.
+    func isDownloaded(_ id: String, base: URL = ModelManager.modelsDir) -> Bool {
+        let dir = folder(for: id, base: base)
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir), isDir.boolValue else { return false }
+        return Self.requiredEntries.allSatisfy { FileManager.default.fileExists(atPath: dir.appendingPathComponent($0).path) }
+    }
+
     func delete(_ id: String) throws { try FileManager.default.removeItem(at: folder(for: id)) }
 
     /// Downloads if needed and returns the model folder. Progress 0…1.

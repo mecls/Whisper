@@ -41,7 +41,7 @@ final class WhisperKitTranscriber: Transcriber {
         // `transcribe(audioArray:decodeOptions:callback:) -> TranscriptionResult?` overload instead
         // of the current `…-> [TranscriptionResult]` one (amendment B3: adapt and report — the
         // brief's trailing-closure form does not compile against 0.18.0's overload set).
-        func decode(promptTokens: [Int]?) async throws -> [TranscriptionResult] {
+        func decode(promptTokens: [Int]?, reportProgress: Bool) async throws -> [TranscriptionResult] {
             let opts = DecodingOptions(
                 task: .transcribe,
                 language: hint.language,
@@ -59,13 +59,13 @@ final class WhisperKitTranscriber: Transcriber {
                 concurrentWorkerCount: long ? 2 : 1,
                 chunkingStrategy: long ? ChunkingStrategy.vad : ChunkingStrategy.none)
             let progressCallback: (TranscriptionProgress) -> Bool? = { p in
-                if long { progress?(min(1, Double(p.windowId + 1) / Double(expectedWindows))) }
+                if long, reportProgress { progress?(min(1, Double(p.windowId + 1) / Double(expectedWindows))) }
                 return nil
             }
             return try await pipe.transcribe(audioArray: samples, decodeOptions: opts, callback: progressCallback)
         }
 
-        var results = try await decode(promptTokens: promptTokens)
+        var results = try await decode(promptTokens: promptTokens, reportProgress: true)
         var text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty, promptTokens != nil {
             // Adaptation (see task-7-report.md): with temperatureFallbackCount: 0 (one decode attempt,
@@ -75,8 +75,10 @@ final class WhisperKitTranscriber: Transcriber {
             // text on real speech (verified against the en fixture, independent of promptTokens content,
             // language, detectLanguage, or usePrefillCache). Retry once without the vocabulary prompt
             // rather than surface "Nothing heard" on real speech; the common case still gets the
-            // dictionary-biased first attempt.
-            results = try await decode(promptTokens: nil)
+            // dictionary-biased first attempt. reportProgress: false here — the first attempt already
+            // reported up to wherever it got to, and a second full pass restarting from window 0 would
+            // otherwise show the HUD bar jump backwards on clips over 30 s (fix round 1, F3).
+            results = try await decode(promptTokens: nil, reportProgress: false)
             text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         }
         let lang = results.first?.language ?? hint.language ?? "unknown"

@@ -29,6 +29,8 @@ enum Strings {
     static let setUpPermissions = "Set up permissions…"
     static let modelReady = "Model: ready"
     static func modelError(_ message: String) -> String { "Model error: \(message)" }
+    static let modelLabelTurbo = "Large v3 Turbo (compressed, 630 MB) — recommended"
+    static let modelLabelLarge = "Large v3 Turbo (full, ~1.5 GB) — maximum accuracy"
 
     // Onboarding
     static let onboardingTitle = "Set up Voice"
