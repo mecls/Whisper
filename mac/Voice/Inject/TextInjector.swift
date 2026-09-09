@@ -15,6 +15,9 @@ final class TextInjector: NSObject, NSPasteboardItemDataProvider {
     private var wasRead = false
 
     func insert(_ text: String, completion: @escaping (InsertResult) -> Void) {
+        // A7: the reducer never issues a second `.insert` before `.inserted`, but stay safe — a stale
+        // paste is closed (its snapshot restored) before a new one starts.
+        if pending != nil { finish(.pastedUnconfirmed) }
         let pb = NSPasteboard.general
         if SecureInput.isActive {
             pb.prepareForNewContents(with: .currentHostOnly)
@@ -49,6 +52,7 @@ final class TextInjector: NSObject, NSPasteboardItemDataProvider {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.restoreDelayAfterRead) { [weak self] in self?.finish(.pasted) }
     }
 
+    // Nothing is retained on the item side: `pending` (and its text/snapshot) lives only on `self`.
     func pasteboardFinishedWithDataProvider(_ pasteboard: NSPasteboard) {}
 
     private func finish(_ result: InsertResult) {

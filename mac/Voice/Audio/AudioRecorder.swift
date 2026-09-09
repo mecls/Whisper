@@ -31,6 +31,7 @@ final class AudioRecorder {
     }
 
     func start() throws {
+        dispatchPrecondition(condition: .onQueue(.main))   // A3: idle-stop Timer needs the main run loop
         idleStopTimer?.invalidate()
         if !engine.isRunning { try engine.start() }
         _ = buffer.drain()
@@ -39,6 +40,7 @@ final class AudioRecorder {
     }
 
     func stop() -> (samples: [Float], ms: Int) {
+        dispatchPrecondition(condition: .onQueue(.main))   // A3: idle-stop Timer needs the main run loop
         isCapturing = false
         let ms = Int((Date().timeIntervalSince(startedAt ?? Date())) * 1000)
         scheduleIdleStop()
@@ -46,6 +48,7 @@ final class AudioRecorder {
     }
 
     func discard() {
+        dispatchPrecondition(condition: .onQueue(.main))   // A3: idle-stop Timer needs the main run loop
         isCapturing = false
         _ = buffer.drain()
         scheduleIdleStop()
