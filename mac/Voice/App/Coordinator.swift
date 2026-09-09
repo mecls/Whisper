@@ -30,10 +30,17 @@ final class Coordinator: ObservableObject {
     var transcriber: Transcriber = WhisperKitTranscriber(modelId: Preferences.modelId)
     var refiner: Refiner = PassthroughRefiner()               // replaced in Task 8
 
+    // C7: the backend client trio — a lazily-built API pointed at the configured server, reading the
+    // bearer token read-only from the Keychain (account = the server URL string, C5); SyncService on
+    // top of it; refiner is swapped from PassthroughRefiner to RefineService in start().
+    private lazy var api = VoiceAPI(base: URL(string: Preferences.serverURL)!, tokenProvider: { Keychain.token(for: Preferences.serverURL) })
+    lazy var sync = SyncService(api: api)
+
     func start() {
         if !Permissions.inputMonitoringGranted() || !Permissions.accessibilityGranted(prompt: false) {
             log.warning("permissions missing at launch — open \"\(Strings.setUpPermissions, privacy: .public)\" from the menu")
         }
+        refiner = RefineService(api: api, outbox: Outbox())
         recorder.onLevel = { [weak self] l in self?.levels.append(l); if self?.hud == .listening { self?.render() } }
         recorder.onCapReached = { [weak self] in self?.send(.hotkeyUp) }
         hotkey.onAction = { [weak self] a in
@@ -46,6 +53,7 @@ final class Coordinator: ObservableObject {
         }
         try? recorder.prepare()
         _ = hotkey.start()
+        sync.start()
         Task { await prepareModel() }
     }
 

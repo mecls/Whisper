@@ -4,12 +4,35 @@ import SwiftUI
 struct VoiceApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @ObservedObject private var coordinator = Coordinator.shared
+    // C7: a separate @ObservedObject on `sync` — a nested ObservableObject's own @Published changes
+    // (unauthorized, userName) do not propagate through `coordinator`'s objectWillChange, so the menu
+    // needs to observe it directly to redraw the badge/pickers.
+    @ObservedObject private var sync = Coordinator.shared.sync
     @Environment(\.openWindow) private var openWindow
+    @AppStorage(Preferences.Key.mode) private var mode = Preferences.mode
+    @AppStorage(Preferences.Key.language) private var language = Preferences.language
+
+    private var menuIcon: String {
+        if sync.unauthorized { return "mic.badge.xmark" }
+        return coordinator.hud == .listening ? "mic.fill" : "mic"
+    }
 
     var body: some Scene {
-        MenuBarExtra(Strings.appName, systemImage: coordinator.hud == .listening ? "mic.fill" : "mic") {
+        MenuBarExtra(Strings.appName, systemImage: menuIcon) {
             Text(coordinator.paused ? Strings.pause : Strings.idle)
             Text(coordinator.modelStatus)
+            Divider()
+            Picker(Strings.mode, selection: $mode) {
+                Text(Strings.modeClean).tag("clean")
+                Text(Strings.modeLiteral).tag("literal")
+            }
+            .onChange(of: mode) { _, newValue in Task { await coordinator.sync.push(mode: newValue) } }
+            Picker(Strings.language, selection: $language) {
+                Text(Strings.langAuto).tag("auto")
+                Text(Strings.langPt).tag("pt")
+                Text(Strings.langEn).tag("en")
+            }
+            .onChange(of: language) { _, newValue in Task { await coordinator.sync.push(language: newValue) } }
             Divider()
             Button(Strings.copyLast) {
                 if let t = coordinator.lastText { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(t, forType: .string) }
