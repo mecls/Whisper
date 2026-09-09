@@ -1,32 +1,8 @@
 import XCTest
 @testable import Voice
 
-/// C2: `offline` forces every call to throw `.offline` regardless of `refineResult`, independent of
-/// whatever success/failure the individual stub properties are set to — this is what lets the offline
-/// test flip the whole stub from "server unreachable" to "server reachable" with one bool.
-private final class StubAPI: VoiceAPIClient {
-    var refineResult: Result<RefineResponse, Error> = .failure(APIError.offline)
-    var posted: [DictationRequest] = []
-    var patched: [(UUID, Injected)] = []
-    var delay: UInt64 = 0
-    var offline = false
-    func refine(_ body: RefineRequest, budgetMs: Int) async throws -> RefineResponse {
-        if offline { throw APIError.offline }
-        if delay > 0 { try await Task.sleep(nanoseconds: delay) }
-        return try refineResult.get()
-    }
-    func postDictation(_ body: DictationRequest) async throws {
-        if offline { throw APIError.offline }
-        posted.append(body)
-    }
-    func patchInjected(clientId: UUID, injected: Injected) async throws {
-        if offline { throw APIError.offline }
-        patched.append((clientId, injected))
-    }
-    func me() async throws -> MeResponse { throw APIError.offline }
-    func putSettings(_ s: ServerSettings) async throws {}
-}
-
+// G5: RefineService is @MainActor; the test class is too so it can construct/call it synchronously.
+@MainActor
 final class RefineServiceTests: XCTestCase {
     private func dictation(_ raw: String) -> Dictation {
         var d = Dictation(clientId: UUID(), startedAt: Date(), app: nil); d.raw = raw; d.audioMs = 3000; d.asrMs = 900; d.language = "pt"; return d
@@ -65,6 +41,9 @@ final class RefineServiceTests: XCTestCase {
         _ = await s.refine(dictation("olá"), mode: "clean")
         XCTAssertEqual(api.posted.count, 1)
         XCTAssertEqual(outbox.count, 0)
+        // G2: the replayed entry is the offline dictation's — it must carry the .offline reason it
+        // actually failed with, not nil and not some other value.
+        XCTAssertEqual(api.posted.first?.fallbackReason, .offline)
     }
 
     func testLiteralSkipsNetworkButStillLogs() async {
@@ -73,6 +52,10 @@ final class RefineServiceTests: XCTestCase {
         let r = await s.refine(dictation("olá"), mode: "literal")
         XCTAssertEqual(r, .literal)
         XCTAssertEqual(api.posted.count, 1)
+        // G2: literal mode is a user choice, not a fallback — the posted row must carry
+        // fallbackReason: null, and the injected kind it was actually logged with.
+        XCTAssertNil(api.posted.first?.fallbackReason)
+        XCTAssertEqual(api.posted.first?.injected, .raw)
     }
 
     func testUnauthorizedMapsToUnauthorized() async {

@@ -53,6 +53,9 @@ final class Coordinator: ObservableObject {
         }
         try? recorder.prepare()
         _ = hotkey.start()
+        // G1: a server-driven hotkey change must go through setHotkey (owns writing Preferences.hotkey
+        // AND re-arming the hotkey monitor) — wired before sync.start() so the very first sync can use it.
+        sync.onHotkeyChange = { [weak self] c in self?.setHotkey(c) }
         sync.start()
         Task { await prepareModel() }
     }

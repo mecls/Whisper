@@ -1,5 +1,7 @@
 import XCTest
 @testable import Voice
+// G5: Outbox is @MainActor.
+@MainActor
 final class OutboxTests: XCTestCase {
     func testCapsAt200KeepingNewest() {
         let o = Outbox()

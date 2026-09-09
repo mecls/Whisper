@@ -74,11 +74,13 @@ protocol VoiceAPIClient {
 
 final class VoiceAPI: VoiceAPIClient {
     private let base: URL
-    private let tokenProvider: () -> String?
+    // G4: Sendable so it can be handed to a detached task — reading the Keychain can pop the
+    // system "allow access" dialog, which must never block the calling (often @MainActor) thread.
+    private let tokenProvider: @Sendable () -> String?
     private let session: URLSession
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
 
-    init(base: URL, tokenProvider: @escaping () -> String?) {
+    init(base: URL, tokenProvider: @escaping @Sendable () -> String?) {
         self.base = base; self.tokenProvider = tokenProvider
         let c = URLSessionConfiguration.ephemeral
         c.waitsForConnectivity = false
@@ -102,12 +104,14 @@ final class VoiceAPI: VoiceAPIClient {
     private struct Empty: Codable {}
 
     private func send<B: Encodable, R: Decodable>(_ method: String, _ path: String, body: B?, timeout: TimeInterval, requestId: String? = nil) async throws -> R {
+        // G4: resolve off the calling actor before building the request.
+        let token = await Task.detached(priority: .userInitiated) { [tokenProvider] in tokenProvider() }.value
         var req = URLRequest(url: base.appendingPathComponent(path), timeoutInterval: timeout)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.setValue("miraside-voice/\(Self.version)", forHTTPHeaderField: "user-agent")
         if let requestId { req.setValue(requestId, forHTTPHeaderField: "X-Request-Id") }
-        if let t = tokenProvider() { req.setValue("Bearer \(t)", forHTTPHeaderField: "authorization") }
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
         if let body { req.httpBody = try JSONEncoder().encode(body) }
         let (data, resp): (Data, URLResponse)
         do { (data, resp) = try await session.data(for: req) } catch let e as URLError {

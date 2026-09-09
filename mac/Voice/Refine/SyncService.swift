@@ -9,6 +9,13 @@ final class SyncService: ObservableObject {
     @Published private(set) var unauthorized = false
     private let api: VoiceAPIClient
     private var timer: Timer?
+    // G3: the last settings object seen from (or successfully sent to) the server — `push` merges
+    // onto this so a `llmModel` override set some other way (e.g. Task 9's model picker) survives a
+    // mode/language-only push instead of being silently cleared.
+    private var last: ServerSettings?
+    // G1: a server-driven hotkey change must go through Coordinator.setHotkey (which owns writing
+    // Preferences.hotkey AND re-arming the hotkey monitor) — SyncService itself never writes it.
+    var onHotkeyChange: ((HotkeyChoice) -> Void)?
 
     init(api: VoiceAPIClient) { self.api = api }
 
@@ -22,17 +29,39 @@ final class SyncService: ObservableObject {
             let me = try await api.me()
             userName = me.user.name
             unauthorized = false
+            last = me.settings
             Preferences.mode = me.settings.mode
             Preferences.language = me.settings.language
-            if let h = HotkeyChoice(rawValue: me.settings.hotkey) { Preferences.hotkey = h }
+            // Compared by rawValue — HotkeyChoice doesn't declare Equatable and adding it is outside
+            // this round's touched files.
+            if let h = HotkeyChoice(rawValue: me.settings.hotkey), h.rawValue != Preferences.hotkey.rawValue {
+                onHotkeyChange?(h)
+            }
             DictionaryCache.shared.update(me.dictionary.map { $0.replacement ?? $0.term })
         } catch APIError.unauthorized { unauthorized = true } catch {}
     }
 
     func push(mode: String? = nil, language: String? = nil, hotkey: HotkeyChoice? = nil) async {
+        // User-initiated (or Coordinator-relayed) local writes happen regardless of whether the
+        // network push below turns out to be a no-op.
+        if let hotkey { Preferences.hotkey = hotkey }
         if let mode { Preferences.mode = mode }
         if let language { Preferences.language = language }
-        if let hotkey { Preferences.hotkey = hotkey }
-        try? await api.putSettings(ServerSettings(mode: Preferences.mode, language: Preferences.language, hotkey: Preferences.hotkey.rawValue, llmModel: nil))
+
+        // G3: merge onto the last known server settings (falling back to Preferences only if we've
+        // never synced) so fields not being changed here — notably `llmModel` — are preserved.
+        var merged = last ?? ServerSettings(mode: Preferences.mode, language: Preferences.language, hotkey: Preferences.hotkey.rawValue, llmModel: nil)
+        if let mode { merged.mode = mode }
+        if let language { merged.language = language }
+        if let hotkey { merged.hotkey = hotkey.rawValue }
+
+        // No-op guard: kills the VoiceApp `.onChange` echo when `sync()` itself just wrote this same
+        // value into Preferences (which re-fires the picker's onChange, which calls push again).
+        guard merged != last else { return }
+
+        do {
+            try await api.putSettings(merged)
+            last = merged
+        } catch {}
     }
 }

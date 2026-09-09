@@ -4,6 +4,8 @@ import os
 private let log = Logger(subsystem: "co.miraside.voice", category: "refine")
 
 /// Budgeted refine with raw fallback; outbox replay after any successful call.
+/// G5: main-actor — the `Refiner` protocol's async methods are called from the @MainActor Coordinator.
+@MainActor
 final class RefineService: Refiner {
     private let api: VoiceAPIClient
     private let outbox: Outbox
@@ -56,11 +58,15 @@ final class RefineService: Refiner {
         // C3: PATCH 404s until a refine/dictation POST has stored the row for this clientId — this
         // only runs after a successful refine (the branch above handles the "never stored" case), so a
         // 404 here means the earlier POST itself failed; log it, do not retry.
-        do { try await api.patchInjected(clientId: clientId, injected: injected) } catch { log.info("patch injected failed") }
+        // G6: the error kind is useful (offline vs. 404 vs. decode failure); APIError carries no
+        // transcript text, so it's fine as .public. clientId is a UUID, also fine as .public.
+        do { try await api.patchInjected(clientId: clientId, injected: injected) } catch { log.info("patch injected failed: \(String(describing: error), privacy: .public)") }
     }
 
     private func logOnly(_ d: Dictation, injected: Injected, fallback: FallbackReason?, mode: String) async {
-        let entry = OutboxEntry(clientId: d.clientId, raw: d.raw ?? "", injected: injected, fallback: fallback ?? .offline, createdAt: d.startedAt,
+        // G2: pass `fallback` through as-is — literal mode calls this with `nil`, and that must reach
+        // the server as `fallbackReason: null`, not get coalesced into a false ".offline".
+        let entry = OutboxEntry(clientId: d.clientId, raw: d.raw ?? "", injected: injected, fallback: fallback, createdAt: d.startedAt,
                                 mode: mode, languageSetting: Preferences.language, languageDetected: d.language, app: d.app, audioMs: d.audioMs, asrMs: d.asrMs)
         do { try await api.postDictation(request(for: entry)) } catch { outbox.add(entry) }
     }
