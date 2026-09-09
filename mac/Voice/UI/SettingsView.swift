@@ -80,21 +80,49 @@ struct ModelTab: View {
     @AppStorage(Preferences.Key.language) private var language = "auto"
     private let manager = ModelManager()
     @State private var downloaded = false
+    @State private var deleteError: String?
+
+    private var activeLabel: String {
+        ModelManager.available.first { $0.id == coordinator.activeModelId }?.label ?? coordinator.activeModelId
+    }
 
     var body: some View {
         Form {
             Picker(Strings.modelPickerLabel, selection: $modelId) {
                 ForEach(ModelManager.available, id: \.id) { m in Text(m.label).tag(m.id) }
             }
-            .onChange(of: modelId) { _, _ in refreshDownloaded() }
+            .onChange(of: modelId) { _, newId in
+                refreshDownloaded()
+                // H2: picking an already-downloaded model swaps to it right away; picking one that
+                // still needs fetching waits for an explicit "Download".
+                if manager.isDownloaded(newId) { coordinator.reloadModel() }
+            }
+            // H3: the picker's selection and the model actually loaded can differ (e.g. right after
+            // picking a not-yet-downloaded model) — this line disambiguates them.
+            Text(Strings.activeModel(activeLabel))
             Text(coordinator.modelStatus)
             HStack {
                 // D5: reloadModel() swaps the transcriber for the currently-picked modelId, resets
                 // the progress HUD, and re-runs prepareModel() — this also drives a fresh download.
                 Button(Strings.downloadModel) { coordinator.reloadModel() }
                     .disabled(downloaded)
-                Button(Strings.deleteModel) { try? manager.delete(modelId); refreshDownloaded() }
-                    .disabled(!downloaded)
+                // H3: always enabled — the recovery path when prepareModel() failed (see the comment
+                // on its catch) and the machine is stuck in .modelLoading with no other way out.
+                Button(Strings.reloadModel) { coordinator.reloadModel() }
+                Button(Strings.deleteModel) {
+                    do {
+                        try manager.delete(modelId)
+                        deleteError = nil
+                        refreshDownloaded()
+                    } catch {
+                        deleteError = Strings.modelDeleteError(error.localizedDescription)
+                    }
+                }
+                // H3: never delete the model actually loaded into the transcriber.
+                .disabled(modelId == coordinator.activeModelId)
+            }
+            if let deleteError {
+                Text(deleteError).foregroundStyle(.red)
             }
             Picker(Strings.defaultLanguage, selection: $language) {
                 Text(Strings.langAuto).tag("auto")
@@ -132,6 +160,9 @@ struct ServerTab: View {
             HStack {
                 Button(Strings.saveToken) {
                     Keychain.set(token: token, for: Preferences.serverURL)
+                    // H4: clear the field before starting the (async) sync — the token is now only
+                    // in the Keychain, never lingering on screen.
+                    token = ""
                     Task { await sync.sync() }
                 }
                 .disabled(token.isEmpty)
@@ -169,7 +200,7 @@ struct DictionaryTab: View {
                 } else {
                     ForEach(entries) { entry in
                         HStack {
-                            Text(entry.replacement.map { "\(entry.term) → \($0)" } ?? entry.term)
+                            Text(entry.replacement.map { Strings.dictionaryReplacement(entry.term, $0) } ?? entry.term)
                             Spacer()
                             Button { Task { await delete(entry) } } label: { Image(systemName: "trash") }
                                 .buttonStyle(.borderless)
@@ -230,55 +261,13 @@ struct DictionaryTab: View {
 
 // MARK: - Permissions
 
-/// Task 9's controller file list does not include `OnboardingView.swift`, so this re-implements the
-/// same live-updating permission rows locally rather than extracting/refactoring that file's private
-/// `row(_:ok:action:)` helper. Small duplication with `OnboardingView`, kept because that file is out
-/// of scope for this task.
+// H5: the rows themselves now live in the shared `PermissionsView` (also used by `OnboardingView`)
+// so there is exactly one copy of that body in the app.
 struct PermissionsTab: View {
-    @State private var mic = false
-    @State private var input = Permissions.inputMonitoringGranted()
-    @State private var ax = Permissions.accessibilityGranted(prompt: false)
-    @State private var fnOk = Permissions.fnUsageIsDoNothing()
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
     var body: some View {
         Form {
-            PermissionRow(title: Strings.permMicrophone, ok: mic) { Task { mic = await Permissions.microphoneGranted() } }
-            PermissionRow(title: Strings.permInputMonitoring, ok: input) { Permissions.requestInputMonitoring(); Permissions.open(.inputMonitoring) }
-            PermissionRow(title: Strings.permAccessibility, ok: ax) { _ = Permissions.accessibilityGranted(prompt: true); Permissions.open(.accessibility) }
-            PermissionRow(title: Strings.permFnKeyboard, ok: fnOk) { Permissions.open(.keyboard) }
-            Divider()
-            Button(Strings.relaunch) { relaunch() }
+            PermissionsView()
         }
         .padding()
-        .onReceive(timer) { _ in
-            input = Permissions.inputMonitoringGranted()
-            ax = Permissions.accessibilityGranted(prompt: false)
-            fnOk = Permissions.fnUsageIsDoNothing()
-        }
-        .task { mic = await Permissions.microphoneGranted() }
-    }
-
-    private func relaunch() {
-        let url = Bundle.main.bundleURL
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        task.arguments = ["-n", url.path]
-        try? task.run()
-        NSApp.terminate(nil)
-    }
-}
-
-private struct PermissionRow: View {
-    let title: String
-    let ok: Bool
-    let action: () -> Void
-    var body: some View {
-        HStack {
-            Image(systemName: ok ? "checkmark.circle.fill" : "circle").foregroundStyle(ok ? .green : .secondary)
-            Text(title)
-            Spacer()
-            if !ok { Button(Strings.grant, action: action) }
-        }
     }
 }

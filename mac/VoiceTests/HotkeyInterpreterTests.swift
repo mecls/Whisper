@@ -45,4 +45,16 @@ final class HotkeyInterpreterTests: XCTestCase {
         _ = i.handle(.flags(fn: false, rightOption: false, rightCommand: false))
         XCTAssertFalse(i.isHeld)
     }
+
+    // H1: press → Esc (cancel) resets isHeld immediately — it must not wait for the physical
+    // flags-release that follows, which is swallowed (returns nil) and produces no further action.
+    func testIsHeldResetsOnCancelBeforeThePhysicalRelease() {
+        var i = HotkeyInterpreter(choice: .fn)
+        _ = i.handle(.flags(fn: true, rightOption: false, rightCommand: false))
+        XCTAssertTrue(i.isHeld)
+        XCTAssertEqual(i.handle(.keyDown(HotkeyInterpreter.escapeKeyCode)), .cancel)
+        XCTAssertFalse(i.isHeld)
+        XCTAssertNil(i.handle(.flags(fn: false, rightOption: false, rightCommand: false)))
+        XCTAssertFalse(i.isHeld)
+    }
 }

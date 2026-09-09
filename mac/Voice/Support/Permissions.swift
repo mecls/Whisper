@@ -37,4 +37,15 @@ enum Permissions {
         }
         NSWorkspace.shared.open(URL(string: url)!)
     }
+
+    // H5: shared by OnboardingView and the Settings Permissions tab (both via PermissionsView) —
+    // relaunches the app (some grants only take effect after a fresh process) and quits this one.
+    static func relaunch() {
+        let url = Bundle.main.bundleURL
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = ["-n", url.path]
+        try? task.run()
+        NSApp.terminate(nil)
+    }
 }

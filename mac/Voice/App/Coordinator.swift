@@ -16,6 +16,9 @@ final class Coordinator: ObservableObject {
     @Published var paused = false
     @Published private(set) var lastText: String?
     @Published private(set) var modelStatus = Strings.modelNotDownloaded
+    // H2/H3: the model actually loaded (or being loaded) into `transcriber` — distinct from
+    // `Preferences.modelId`/the Settings picker, which may point at a different, not-yet-loaded id.
+    @Published private(set) var activeModelId = Preferences.modelId
 
     private var machine = DictationMachine()
     private lazy var hotkey = HotkeyMonitor(choice: Preferences.hotkey)
@@ -42,6 +45,7 @@ final class Coordinator: ObservableObject {
         if !Permissions.inputMonitoringGranted() || !Permissions.accessibilityGranted(prompt: false) {
             log.warning("permissions missing at launch — open \"\(Strings.setUpPermissions, privacy: .public)\" from the menu")
         }
+        activeModelId = Preferences.modelId
         refiner = RefineService(api: api, outbox: Outbox())
         recorder.onLevel = { [weak self] l in self?.levels.append(l); if self?.hud == .listening { self?.render() } }
         recorder.onCapReached = { [weak self] in self?.send(.hotkeyUp) }
@@ -68,6 +72,7 @@ final class Coordinator: ObservableObject {
     // `Preferences.modelId` the picker just selected — swap the transcriber, reset the progress UI,
     // then re-run the same prepare path `start()` uses.
     func reloadModel() {
+        activeModelId = Preferences.modelId
         transcriber = WhisperKitTranscriber(modelId: Preferences.modelId)
         send(.modelProgress(0))
         Task { [weak self] in await self?.prepareModel() }
@@ -81,6 +86,8 @@ final class Coordinator: ObservableObject {
             modelStatus = Strings.modelReady
             send(.modelReady)
         } catch {
+            // H2/H3: the machine stays in `.modelLoading` until a reload succeeds — Settings' "Reload
+            // model" button (always enabled) is the recovery path for this state.
             modelStatus = Strings.modelError(error.localizedDescription)
             log.error("model prepare failed: \(error.localizedDescription, privacy: .public)")
         }

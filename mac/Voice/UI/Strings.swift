@@ -71,6 +71,9 @@ enum Strings {
     static let modelPickerLabel = "Model"
     static let downloadModel = "Download"
     static let deleteModel = "Delete"
+    static let reloadModel = "Reload model"
+    static func activeModel(_ label: String) -> String { "Active: \(label)" }
+    static func modelDeleteError(_ message: String) -> String { "Couldn't delete the model: \(message)" }
     static let defaultLanguage = "Default language"
 
     static let serverURLLabel = "Server URL"
@@ -89,4 +92,5 @@ enum Strings {
     static let dictionaryLoadError = "Couldn't load the dictionary"
     static let dictionaryAddError = "Couldn't add the term"
     static let dictionaryDeleteError = "Couldn't delete the term"
+    static func dictionaryReplacement(_ term: String, _ replacement: String) -> String { "\(term) → \(replacement)" }
 }
