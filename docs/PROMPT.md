@@ -42,6 +42,11 @@ in the filler list (`um`, `uh`, `uhm`, `umm`, `hmm`, `hm`, `mm`, `ah`, `eh`,
 `er`, `erm`, `hã`, `hum`, `ééé`, `éé`, `ahn`, `ãh`, `hmmm`) is noise: the
 model is right to return nothing, and an empty output is accepted
 (`injected: 'none'`). For any other input, an empty output is rejected.
+**Empty output is accepted only when the input is noise (under 4 words, all
+fillers); otherwise it is rejected.** `refineText` applies this check itself
+— right after `normalizeOutput`, before calling `checkGuards` — returning
+`{ cleaned: '', fallbackReason: null }` for noise, so `checkGuards` can stay
+unconditional and pure.
 
 **Normalization** (`normalizeOutput`, pure, safe to call twice) strips, in
 order: a full `<think>...</think>` block anywhere in the text, then a stray
@@ -53,7 +58,7 @@ text:"-style preamble.
 **Guard checks** (`checkGuards(raw, out)`), evaluated on the *normalized*
 output, in order:
 - `think-leak` — output still contains `<think>` after normalization.
-- `empty` — output is empty (and the input was not noise).
+- `empty` — output is empty. `checkGuards` itself is unconditional here; `refineText` short-circuits before calling it (see below), so this reason only ever surfaces for non-noise input.
 - `preamble` — output starts with a `Cleaned text:` line.
 - `too-long` — output length exceeds `2.5 × rawLen + 20`.
 - `too-short` — **only when the trimmed raw is 25+ chars**, output length is

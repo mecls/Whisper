@@ -1,6 +1,6 @@
 import type { LlmCaller } from './client.js'
 import { classifyLlmError } from './errors.js'
-import { checkGuards, estimateTokens, normalizeOutput } from './guards.js'
+import { checkGuards, estimateTokens, isNoise, normalizeOutput } from './guards.js'
 import { buildSystemPrompt, type DictionaryTerm } from './prompt.js'
 import type { FallbackReason } from '../db/schema.js'
 
@@ -43,6 +43,7 @@ export async function refineText(input: RefineInput, llm: LlmCaller): Promise<Re
     const meta = { ...base, llmMs, reasoningChars: res.reasoningChars, completionTokens: res.completionTokens }
     if (res.finishReason === 'length') return { ...meta, cleaned: input.raw, fallbackReason: 'llm-truncated' }
     const cleaned = normalizeOutput(res.content)
+    if (cleaned.length === 0 && isNoise(input.raw)) return { ...meta, cleaned: '', fallbackReason: null }
     const guard = checkGuards(input.raw, cleaned)
     if (!guard.ok) return { ...meta, cleaned: input.raw, fallbackReason: 'guard-rejected', guardReason: guard.reason }
     return { ...meta, cleaned, fallbackReason: null }

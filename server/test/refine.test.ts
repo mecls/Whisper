@@ -41,6 +41,18 @@ test('max_tokens floors at 512 and scales with input', async () => {
   assert.equal(seen, 1000 * 3 + 192)
 })
 
+test('noise input accepts an empty LLM output', async () => {
+  const r = await refineText({ ...base, raw: 'hã hã hã' }, ok(''))
+  assert.equal(r.cleaned, '')
+  assert.equal(r.fallbackReason, null)
+})
+
+test('non-noise input still rejects an empty LLM output', async () => {
+  const r = await refineText({ ...base, raw: 'olá tudo bem contigo hoje' }, ok(''))
+  assert.equal(r.fallbackReason, 'guard-rejected')
+  assert.equal(r.guardReason, 'empty')
+})
+
 test('system prompt embeds the dictionary', () => {
   const p = buildSystemPrompt([{ term: 'Miraside', replacement: null }, { term: 'convex', replacement: 'Convex' }])
   assert.match(p, /Miraside/)
