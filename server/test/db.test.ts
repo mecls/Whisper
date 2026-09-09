@@ -1,5 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { openDb } from '../src/db/client.js'
 import { users, dictations } from '../src/db/schema.js'
@@ -21,7 +24,19 @@ test('migrations apply and dictations enforce (user, client_id) uniqueness', () 
 })
 
 test('opening twice does not re-run migrations', () => {
-  const db = openDb(':memory:')
-  const n = db.raw.prepare('select count(*) as n from _migrations').get() as { n: number }
-  assert.equal(n.n, 1)
+  const dir = mkdtempSync(join(tmpdir(), 'voice-db-'))
+  const dbPath = join(dir, 'voice.db')
+  try {
+    const first = openDb(dbPath)
+    first.raw.close()
+
+    const second = openDb(dbPath)
+    const n = second.raw.prepare('select count(*) as n from _migrations').get() as { n: number }
+    assert.equal(n.n, 1)
+    const tables = second.raw.prepare("select name from sqlite_master where type='table'").all() as { name: string }[]
+    assert.ok(tables.some((t) => t.name === 'dictations'))
+    second.raw.close()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
