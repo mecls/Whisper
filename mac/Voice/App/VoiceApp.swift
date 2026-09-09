@@ -16,14 +16,14 @@ struct VoiceApp: App {
             }.disabled(coordinator.lastText == nil)
             Button(coordinator.paused ? Strings.resume : Strings.pause) { coordinator.paused.toggle() }
             Divider()
-            Button("Set up permissions…") { openWindow(id: "onboarding"); NSApp.activate(ignoringOtherApps: true) }
+            Button(Strings.setUpPermissions) { openWindow(id: "onboarding"); NSApp.activate(ignoringOtherApps: true) }
             SettingsLink { Text(Strings.settings) }
             Divider()
             Button(Strings.quit) { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
         }
         .menuBarExtraStyle(.menu)
 
-        Window("Set up Voice", id: "onboarding") { OnboardingView(coordinator: coordinator) }
+        Window(Strings.onboardingTitle, id: "onboarding") { OnboardingView(coordinator: coordinator) }
             .windowResizability(.contentSize)
 
         Settings { Text("Settings arrive in Task 9").padding() }
@@ -53,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window = existing
         } else {
             window = NSWindow(contentViewController: NSHostingController(rootView: OnboardingView(coordinator: Coordinator.shared)))
-            window.title = "Set up Voice"
+            window.title = Strings.onboardingTitle
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             onboardingWindow = window

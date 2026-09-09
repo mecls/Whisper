@@ -10,17 +10,17 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Set up Voice").font(.title2.bold())
-            row("Microphone", ok: mic) { Task { mic = await Permissions.microphoneGranted() } }
-            row("Input Monitoring (to see the Fn key)", ok: input) { Permissions.requestInputMonitoring(); Permissions.open(.inputMonitoring) }
-            row("Accessibility (to paste with ⌘V)", ok: ax) { _ = Permissions.accessibilityGranted(prompt: true); Permissions.open(.accessibility) }
-            row("Keyboard › Press 🌐 key to → Do Nothing", ok: fnOk) { Permissions.open(.keyboard) }
+            Text(Strings.onboardingTitle).font(.title2.bold())
+            row(Strings.permMicrophone, ok: mic) { Task { mic = await Permissions.microphoneGranted() } }
+            row(Strings.permInputMonitoring, ok: input) { Permissions.requestInputMonitoring(); Permissions.open(.inputMonitoring) }
+            row(Strings.permAccessibility, ok: ax) { _ = Permissions.accessibilityGranted(prompt: true); Permissions.open(.accessibility) }
+            row(Strings.permFnKeyboard, ok: fnOk) { Permissions.open(.keyboard) }
             Divider()
-            Text("Some grants only take effect after a relaunch.").font(.caption).foregroundStyle(.secondary)
+            Text(Strings.onboardingRelaunchNote).font(.caption).foregroundStyle(.secondary)
             HStack {
-                Button("Relaunch") { relaunch() }
+                Button(Strings.relaunch) { relaunch() }
                 Spacer()
-                Button("Done") { Preferences.onboarded = true; NSApp.keyWindow?.close() }
+                Button(Strings.onboardingDone) { Preferences.onboarded = true; NSApp.keyWindow?.close() }
                     .disabled(!(mic && input && ax))
             }
         }

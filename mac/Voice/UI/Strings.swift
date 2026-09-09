@@ -25,4 +25,18 @@ enum Strings {
     static let langAuto = "Auto"
     static let langPt = "Português"
     static let langEn = "English"
+
+    static let setUpPermissions = "Set up permissions…"
+    static let modelReady = "Model: ready"
+    static func modelError(_ message: String) -> String { "Model error: \(message)" }
+
+    // Onboarding
+    static let onboardingTitle = "Set up Voice"
+    static let permMicrophone = "Microphone"
+    static let permInputMonitoring = "Input Monitoring (to see the Fn key)"
+    static let permAccessibility = "Accessibility (to paste with ⌘V)"
+    static let permFnKeyboard = "Keyboard › Press 🌐 key to → Do Nothing"
+    static let onboardingRelaunchNote = "Some grants only take effect after a relaunch."
+    static let relaunch = "Relaunch"
+    static let onboardingDone = "Done"
 }

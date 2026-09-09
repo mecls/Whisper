@@ -25,14 +25,14 @@ final class Coordinator: ObservableObject {
     private var levels: [Float] = []
     private var hudShowWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
-    private var dictations: [UUID: Dictation] = [:]   // side table for samples/text handed to adapters
+    private var panelShown = false   // separates "update" (levels/state can change any time) from "reveal"
 
     var transcriber: Transcriber = FixedTextTranscriber()    // replaced in Task 7
     var refiner: Refiner = PassthroughRefiner()               // replaced in Task 8
 
     func start() {
         if !Permissions.inputMonitoringGranted() || !Permissions.accessibilityGranted(prompt: false) {
-            log.warning("permissions missing at launch — open \"Set up permissions…\" from the menu")
+            log.warning("permissions missing at launch — open \"\(Strings.setUpPermissions, privacy: .public)\" from the menu")
         }
         recorder.onLevel = { [weak self] l in self?.levels.append(l); if self?.hud == .listening { self?.render() } }
         recorder.onCapReached = { [weak self] in self?.send(.hotkeyUp) }
@@ -56,10 +56,10 @@ final class Coordinator: ObservableObject {
             try await transcriber.prepare { [weak self] p in
                 Task { @MainActor in self?.modelStatus = "\(Strings.modelLoading) \(Int(p * 100)) %"; self?.send(.modelProgress(p)) }
             }
-            modelStatus = "Model: ready"
+            modelStatus = Strings.modelReady
             send(.modelReady)
         } catch {
-            modelStatus = "Model error: \(error.localizedDescription)"
+            modelStatus = Strings.modelError(error.localizedDescription)
             log.error("model prepare failed: \(error.localizedDescription, privacy: .public)")
         }
     }
@@ -124,23 +124,38 @@ final class Coordinator: ObservableObject {
         hudShowWork?.cancel(); hideWork?.cancel()
         switch state {
         case .hidden:
+            panelShown = false
             panel.hide()
         case .listening:
-            // 150 ms delay: Fn+arrow combos cancel before the HUD ever appears.
-            let w = DispatchWorkItem { [weak self] in self?.render() }
+            // 150 ms delay: Fn+arrow combos cancel before the HUD ever appears. Nothing between
+            // now and the timer firing (onLevel's render() calls included) may reveal the panel.
+            let w = DispatchWorkItem { [weak self] in
+                self?.panelShown = true
+                self?.render()
+            }
             hudShowWork = w
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: w)
         case .done, .message:
+            panelShown = true
             render()
-            let w = DispatchWorkItem { [weak self] in self?.panel.hide() }
+            let w = DispatchWorkItem { [weak self] in
+                self?.panelShown = false
+                self?.panel.hide()
+            }
             hideWork = w
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: w)
         default:
+            panelShown = true
             render()
         }
     }
 
-    private func render() { panel.show(hud, levels: levels) }
+    /// Updates the panel's content only once it has been revealed (see `showHUD`'s `.listening`
+    /// case) — called on every level tick, but a no-op until `panelShown` is set.
+    private func render() {
+        guard panelShown else { return }
+        panel.show(hud, levels: levels)
+    }
 }
 
 // Task 6 stubs, replaced in Tasks 7 and 8.

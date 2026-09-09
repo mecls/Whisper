@@ -22,7 +22,9 @@ final class TextInjector: NSObject, NSPasteboardItemDataProvider {
         if SecureInput.isActive {
             pb.prepareForNewContents(with: .currentHostOnly)
             pb.setString(text, forType: .string)
-            completion(.clipboardOnly)
+            // Dispatched, not called inline: keeps this callback out of the coordinator's effect-loop
+            // call frame, so a sibling `.hud(.message(...))` effect can never race it.
+            DispatchQueue.main.async { completion(.clipboardOnly) }
             return
         }
         let snapshot = PasteboardSnapshot.capture(pb)
