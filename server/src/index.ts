@@ -2,10 +2,18 @@ import { readFileSync } from 'node:fs'
 import { buildApp } from './app.js'
 import { env } from './env.js'
 import { openDb } from './db/client.js'
+import { makeOllamaCaller, probeModels } from './llm/client.js'
+import { Semaphore } from './llm/semaphore.js'
 
 const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version as string
 const db = openDb(env.databasePath())
-const app = buildApp({ db, llm: null, version })
+const app = buildApp({
+  db,
+  llm: makeOllamaCaller(),
+  version,
+  llmSemaphore: new Semaphore(env.llmConcurrency()),
+  probeLlm: probeModels,
+})
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down')

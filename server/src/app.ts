@@ -5,6 +5,10 @@ import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fas
 import { env } from './env.js'
 import type { Db } from './db/client.js'
 import { authenticate, hashToken, FailedAuthLimiter, type AuthUser } from './auth.js'
+import type { LlmCaller } from './llm/client.js'
+import type { Semaphore } from './llm/semaphore.js'
+import { registerRefine } from './routes/refine.js'
+import { registerDictations } from './routes/dictations.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -15,9 +19,14 @@ declare module 'fastify' {
 
 export interface AppDeps {
   db: Db
-  llm: unknown
+  llm: LlmCaller
   version: string
+  llmSemaphore?: Semaphore
+  probeLlm?: () => Promise<string[]>
+  settingsFor?: (userId: string) => { llmModel?: string } | null
 }
+
+const LLM_PROBE_CACHE_MS = 60_000
 
 export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({
@@ -65,6 +74,26 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     reply.header('x-request-id', req.id)
   })
 
+  registerRefine(app, deps)
+  registerDictations(app, deps)
+
+  // Cached per app instance: a probe never fires more than once per 60s and never
+  // throws past this function, so /health always answers 200.
+  let llmProbeCache: { status: 'ok' | 'degraded'; expiresAt: number } | null = null
+  async function probeLlmStatus(): Promise<'ok' | 'degraded' | 'unknown'> {
+    if (!deps.probeLlm) return 'unknown'
+    const now = Date.now()
+    if (llmProbeCache && llmProbeCache.expiresAt > now) return llmProbeCache.status
+    let status: 'ok' | 'degraded' = 'ok'
+    try {
+      await deps.probeLlm()
+    } catch {
+      status = 'degraded'
+    }
+    llmProbeCache = { status, expiresAt: now + LLM_PROBE_CACHE_MS }
+    return status
+  }
+
   app.withTypeProvider<ZodTypeProvider>().get('/health', async () => {
     let db: 'ok' | 'error' = 'ok'
     try {
@@ -72,11 +101,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     } catch {
       db = 'error'
     }
+    const llm = await probeLlmStatus()
     return {
       ok: true,
       version: deps.version,
       db,
-      llm: 'unknown',
+      llm,
     }
   })
 
