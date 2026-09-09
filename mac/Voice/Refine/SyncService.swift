@@ -64,4 +64,13 @@ final class SyncService: ObservableObject {
             last = merged
         } catch {}
     }
+
+    // D9: the Server tab's "Sign out" button calls this instead of assigning `unauthorized` itself
+    // (it's `private(set)`). The sync timer keeps running; the next `sync()` will 401 and stay
+    // unauthorized until a new token is saved.
+    func signOut() {
+        Keychain.delete(account: Preferences.serverURL)
+        unauthorized = true
+        userName = nil
+    }
 }

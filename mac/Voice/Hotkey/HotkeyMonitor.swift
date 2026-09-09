@@ -5,6 +5,10 @@ import CoreGraphics
 final class HotkeyMonitor {
     private let tap = EventTap()
     private var interpreter: HotkeyInterpreter
+    // D2: a choice picked in Settings while the current key is physically held is staged here and
+    // applied on the interpreter's next `.release`/`.cancel`, instead of swapping the interpreter
+    // (and orphaning the held key) mid-press.
+    private var pendingChoice: HotkeyChoice?
     private var listening = false
     var onAction: ((HotkeyAction) -> Void)?
 
@@ -16,7 +20,12 @@ final class HotkeyMonitor {
         tap.onEvent = { [weak self] type, event in self?.handle(type, event) }
     }
 
-    func setChoice(_ choice: HotkeyChoice) { interpreter = HotkeyInterpreter(choice: choice) }
+    // D2: a no-op (beyond staging `pendingChoice`) while a press is in flight — applied in `handle`
+    // once the interpreter reports `.release`/`.cancel` for the currently-held key.
+    func setChoice(_ choice: HotkeyChoice) {
+        guard interpreter.isHeld else { interpreter = HotkeyInterpreter(choice: choice); return }
+        pendingChoice = choice
+    }
 
     @discardableResult
     func start() -> Bool { tap.start(mask: Self.idleMask) }
@@ -46,6 +55,12 @@ final class HotkeyMonitor {
             return
         }
         if let action = interpreter.handle(keyEvent) {
+            // D2: the deferred choice (if any) is applied only once the key that was held is fully
+            // released/cancelled — never mid-press.
+            if (action == .release || action == .cancel), let pending = pendingChoice {
+                interpreter = HotkeyInterpreter(choice: pending)
+                pendingChoice = nil
+            }
             DispatchQueue.main.async { [weak self] in self?.onAction?(action) }
         }
     }

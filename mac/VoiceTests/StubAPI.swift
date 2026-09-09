@@ -12,6 +12,8 @@ final class StubAPI: VoiceAPIClient {
     var puts: [ServerSettings] = []
     var delay: UInt64 = 0
     var offline = false
+    // D3: in-memory dictionary for listTerms/addTerm/deleteTerm.
+    var terms: [DictionaryEntry] = []
 
     func refine(_ body: RefineRequest, budgetMs: Int) async throws -> RefineResponse {
         if offline { throw APIError.offline }
@@ -33,5 +35,19 @@ final class StubAPI: VoiceAPIClient {
     func putSettings(_ s: ServerSettings) async throws {
         if offline { throw APIError.offline }
         puts.append(s)
+    }
+    func listTerms() async throws -> [DictionaryEntry] {
+        if offline { throw APIError.offline }
+        return terms
+    }
+    func addTerm(_ term: String, replacement: String?, teamWide: Bool) async throws -> DictionaryEntry {
+        if offline { throw APIError.offline }
+        let entry = DictionaryEntry(id: UUID().uuidString, term: term, replacement: replacement, note: nil, teamWide: teamWide, createdAt: 0)
+        terms.append(entry)
+        return entry
+    }
+    func deleteTerm(id: String) async throws {
+        if offline { throw APIError.offline }
+        terms.removeAll { $0.id == id }
     }
 }

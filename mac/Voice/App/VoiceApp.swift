@@ -49,7 +49,10 @@ struct VoiceApp: App {
         Window(Strings.onboardingTitle, id: "onboarding") { OnboardingView(coordinator: coordinator) }
             .windowResizability(.contentSize)
 
-        Settings { Text("Settings arrive in Task 9").padding() }
+        // D4: SettingsView reads Coordinator.shared directly rather than the @ObservedObject
+        // instances above, since a Settings scene's content closure is built fresh each time the
+        // window opens.
+        Settings { SettingsView(coordinator: Coordinator.shared, sync: Coordinator.shared.sync) }
     }
 }
 

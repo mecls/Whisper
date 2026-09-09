@@ -1,6 +1,5 @@
 enum HotkeyChoice: String, CaseIterable, Codable {
     case fn, rightOption, rightCommand
-    var label: String {
-        switch self { case .fn: "Fn (🌐)"; case .rightOption: "Right ⌥"; case .rightCommand: "Right ⌘" }
-    }
+    // Task 9: literals moved to Strings.swift (every user-facing string lives there).
+    var label: String { Strings.hotkeyLabel(self) }
 }

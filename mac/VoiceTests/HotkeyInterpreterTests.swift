@@ -34,4 +34,15 @@ final class HotkeyInterpreterTests: XCTestCase {
         XCTAssertEqual(i.handle(.flags(fn: false, rightOption: true, rightCommand: false)), .press)
         XCTAssertEqual(i.handle(.flags(fn: false, rightOption: false, rightCommand: false)), .release)
     }
+
+    // D2: isHeld is true after press, false after release — HotkeyMonitor.setChoice relies on this
+    // to decide whether a Settings hotkey change must be deferred to the next release/cancel.
+    func testIsHeldReflectsPressAndRelease() {
+        var i = HotkeyInterpreter(choice: .fn)
+        XCTAssertFalse(i.isHeld)
+        _ = i.handle(.flags(fn: true, rightOption: false, rightCommand: false))
+        XCTAssertTrue(i.isHeld)
+        _ = i.handle(.flags(fn: false, rightOption: false, rightCommand: false))
+        XCTAssertFalse(i.isHeld)
+    }
 }

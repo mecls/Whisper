@@ -33,7 +33,9 @@ final class Coordinator: ObservableObject {
     // C7: the backend client trio — a lazily-built API pointed at the configured server, reading the
     // bearer token read-only from the Keychain (account = the server URL string, C5); SyncService on
     // top of it; refiner is swapped from PassthroughRefiner to RefineService in start().
-    private lazy var api = VoiceAPI(base: URL(string: Preferences.serverURL)!, tokenProvider: { Keychain.token(for: Preferences.serverURL) })
+    // D3/Task 9: internal (not private) so the Settings window's Dictionary tab can call
+    // listTerms/addTerm/deleteTerm directly.
+    lazy var api = VoiceAPI(base: URL(string: Preferences.serverURL)!, tokenProvider: { Keychain.token(for: Preferences.serverURL) })
     lazy var sync = SyncService(api: api)
 
     func start() {
@@ -61,6 +63,15 @@ final class Coordinator: ObservableObject {
     }
 
     func setHotkey(_ c: HotkeyChoice) { Preferences.hotkey = c; hotkey.setChoice(c) }
+
+    // D5: the Settings window's Model tab "Download"/"Delete" actions call this to pick up whatever
+    // `Preferences.modelId` the picker just selected — swap the transcriber, reset the progress UI,
+    // then re-run the same prepare path `start()` uses.
+    func reloadModel() {
+        transcriber = WhisperKitTranscriber(modelId: Preferences.modelId)
+        send(.modelProgress(0))
+        Task { [weak self] in await self?.prepareModel() }
+    }
 
     private func prepareModel() async {
         do {

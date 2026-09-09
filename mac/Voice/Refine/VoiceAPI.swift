@@ -62,6 +62,18 @@ struct MeResponse: Decodable {
     let user: User; let settings: ServerSettings; let dictionary: [Term]; let server: Server
 }
 
+/// D3/`docs/API.md`: the full `GET/POST /v1/dictionary` entry shape — richer than `MeResponse.Term`
+/// (which only carries `term`/`replacement`, the subset embedded in `/v1/me`). `id` is required to
+/// delete an entry, which `/v1/me`'s reduced shape cannot provide.
+struct DictionaryEntry: Decodable, Identifiable, Equatable {
+    let id: String
+    let term: String
+    let replacement: String?
+    let note: String?
+    let teamWide: Bool
+    let createdAt: Int
+}
+
 enum APIError: Error, Equatable { case unauthorized, server(Int), offline, timeout, decoding }
 
 protocol VoiceAPIClient {
@@ -70,6 +82,10 @@ protocol VoiceAPIClient {
     func patchInjected(clientId: UUID, injected: Injected) async throws
     func me() async throws -> MeResponse
     func putSettings(_ s: ServerSettings) async throws
+    // D3: Task 9's Dictionary tab.
+    func listTerms() async throws -> [DictionaryEntry]
+    func addTerm(_ term: String, replacement: String?, teamWide: Bool) async throws -> DictionaryEntry
+    func deleteTerm(id: String) async throws
 }
 
 final class VoiceAPI: VoiceAPIClient {
@@ -100,6 +116,18 @@ final class VoiceAPI: VoiceAPIClient {
     }
     func me() async throws -> MeResponse { try await send("GET", "/v1/me", body: nil as Empty?, timeout: 10) }
     func putSettings(_ s: ServerSettings) async throws { let _: ServerSettings = try await send("PUT", "/v1/settings", body: s, timeout: 10) }
+
+    // D3: mirrors GET/POST/DELETE /v1/dictionary (docs/API.md).
+    func listTerms() async throws -> [DictionaryEntry] {
+        try await send("GET", "/v1/dictionary", body: nil as Empty?, timeout: 10)
+    }
+    func addTerm(_ term: String, replacement: String?, teamWide: Bool) async throws -> DictionaryEntry {
+        struct Body: Encodable { let term: String; let replacement: String?; let teamWide: Bool }
+        return try await send("POST", "/v1/dictionary", body: Body(term: term, replacement: replacement, teamWide: teamWide), timeout: 10)
+    }
+    func deleteTerm(id: String) async throws {
+        let _: Empty = try await send("DELETE", "/v1/dictionary/\(id)", body: nil as Empty?, timeout: 10)
+    }
 
     private struct Empty: Codable {}
 

@@ -9,7 +9,9 @@ enum HotkeyAction: Equatable { case press, release, cancel }
 struct HotkeyInterpreter {
     static let escapeKeyCode: UInt16 = 53
     let choice: HotkeyChoice
-    private var held = false
+    // D2: exposed so HotkeyMonitor can tell whether a `setChoice` while this key is held must be
+    // deferred instead of orphaning the in-flight press.
+    private(set) var isHeld = false
     private var cancelled = false
 
     init(choice: HotkeyChoice) { self.choice = choice }
@@ -19,16 +21,16 @@ struct HotkeyInterpreter {
         case .flags(let fn, let ro, let rc):
             let down: Bool
             switch choice { case .fn: down = fn; case .rightOption: down = ro; case .rightCommand: down = rc }
-            if down && !held { held = true; cancelled = false; return .press }
-            if !down && held {
-                held = false
+            if down && !isHeld { isHeld = true; cancelled = false; return .press }
+            if !down && isHeld {
+                isHeld = false
                 defer { cancelled = false }
                 return cancelled ? nil : .release
             }
             return nil
         case .keyDown:
             // Any real key while the hotkey is held means a shortcut (Fn+F5, Fn+←, Esc): not a dictation.
-            guard held, !cancelled else { return nil }
+            guard isHeld, !cancelled else { return nil }
             cancelled = true
             return .cancel
         }
