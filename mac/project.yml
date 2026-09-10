@@ -1,0 +1,101 @@
+# Ad-hoc signed until an Apple Development identity exists on this Mac.
+# `security find-identity -v -p codesigning` returned 0 valid identities here,
+# so both targets below use CODE_SIGN_STYLE: Manual / CODE_SIGN_IDENTITY: "-"
+# (ad-hoc) instead of an Apple Development identity + team.
+#
+# To switch to a real signing identity once one exists:
+#   1. Xcode > Settings > Accounts > add your Apple ID.
+#   2. Xcode > Settings > Accounts > Manage Certificates > + > Apple Development.
+#   3. On both targets below, set:
+#        DEVELOPMENT_TEAM: <your 10-char team id>
+#        CODE_SIGN_STYLE: Automatic
+#        CODE_SIGN_IDENTITY: "Apple Development"
+#      (remove CODE_SIGN_IDENTITY: "-" and PROVISIONING_PROFILE_SPECIFIER: "")
+#   4. Re-run `xcodegen generate`.
+#
+# Until then, macOS re-asks the Input Monitoring / Accessibility / Microphone
+# permissions after every rebuild, because an ad-hoc signature has no stable
+# identity for TCC to remember across builds.
+name: Voice
+options:
+  bundleIdPrefix: co.miraside
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+packages:
+  WhisperKit:
+    url: https://github.com/argmaxinc/argmax-oss-swift.git
+    from: 0.18.0
+targets:
+  Voice:
+    type: application
+    platform: macOS
+    sources: [Voice]
+    dependencies:
+      - package: WhisperKit
+        product: WhisperKit
+    info:
+      path: Voice/Info.plist
+      properties:
+        CFBundleDisplayName: Voice
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSUIElement: true
+        LSMinimumSystemVersion: "15.0"
+        NSMicrophoneUsageDescription: "Voice records your speech while you hold the dictation key. Audio never leaves this Mac."
+        NSHumanReadableCopyright: "Miraside"
+    entitlements:
+      path: Voice/Voice.entitlements
+      properties: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.miraside.voice
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        PROVISIONING_PROFILE_SPECIFIER: ""
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: targeted
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+  VoiceTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [VoiceTests, { path: Fixtures, type: folder, buildPhase: resources }]
+    dependencies:
+      - target: Voice
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        PROVISIONING_PROFILE_SPECIFIER: ""
+        # Brief's project.yml gives VoiceTests no `info:` block and no
+        # GENERATE_INFOPLIST_FILE setting; without this, code signing fails
+        # with "target does not have an Info.plist file and one is not
+        # being generated automatically". Not part of the signing ruling —
+        # a gap in the brief needed to make the test bundle buildable.
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Voice:
+    build:
+      targets:
+        Voice: all
+        VoiceTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [VoiceTests]
+      # VoiceTests is TEST_HOST-launched inside Voice.app, so it does not inherit the invoking
+      # shell's environment (macOS-specific: unlike a standalone xctest process, an app host launch
+      # does not pick up the parent process's env). This passthrough forwards VOICE_ASR_TESTS from
+      # xcodebuild's own environment (itself inherited from the shell) as an explicit launch env var,
+      # so `VOICE_ASR_TESTS=1 xcodebuild test …` reaches ProcessInfo.processInfo.environment in the
+      # opt-in WhisperKitTranscriberTests. Resolves to empty when unset, so the test still skips.
+      environmentVariables:
+        VOICE_ASR_TESTS: "$(VOICE_ASR_TESTS)"

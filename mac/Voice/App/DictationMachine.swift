@@ -1,0 +1,116 @@
+import Foundation
+
+enum RefineResult: Equatable { case cleaned(String), rawFallback(FallbackReason), literal }
+
+enum MachineEvent {
+    case modelReady, modelProgress(Double)
+    case hotkeyDown(FrontmostApp?), hotkeyUp, cancelRequested
+    case audioStopped(samples: [Float], ms: Int, speech: Bool)
+    case transcribed(UUID, text: String, language: String, ms: Int), transcriptionFailed(UUID)
+    case refined(UUID, RefineResult)
+    case inserted(UUID, Injected), insertFailed(UUID)
+}
+
+enum HUDState: Equatable {
+    case hidden, listening, transcribing(progress: Double?), cleaning
+    case done(preview: String?), message(String), modelLoading(Double)
+}
+
+enum Effect: Equatable {
+    case startRecording, stopRecording, discardRecording
+    case transcribe(UUID), refine(UUID), insert(UUID, String)
+    case hud(HUDState), reportInjected(UUID, Injected)
+}
+
+/// Pure reducer. Owns the queue of in-flight dictations; pastes strictly in order.
+struct DictationMachine {
+    enum Phase: Equatable { case modelLoading(Double), ready }
+    static let minimumMs = 400
+
+    private(set) var phase: Phase = .modelLoading(0)
+    private(set) var queue: [Dictation] = []
+    private var recording: UUID?      // dictation currently capturing audio
+    private var cancelledRecording = false
+
+    mutating func handle(_ e: MachineEvent) -> [Effect] {
+        switch e {
+        case .modelProgress(let p):
+            phase = .modelLoading(p); return [.hud(.modelLoading(p))]
+        case .modelReady:
+            phase = .ready; return [.hud(.hidden)]
+
+        case .hotkeyDown(let app):
+            if case .modelLoading(let p) = phase { return [.hud(.modelLoading(p))] }
+            guard recording == nil else { return [] }
+            let d = Dictation(clientId: UUID(), startedAt: Date(), app: app)
+            queue.append(d); recording = d.clientId; cancelledRecording = false
+            return [.startRecording, .hud(.listening)]
+
+        case .hotkeyUp:
+            guard recording != nil, !cancelledRecording else { return [] }
+            return [.stopRecording]
+
+        case .cancelRequested:
+            guard let id = recording else { return [] }
+            queue.removeAll { $0.clientId == id }
+            recording = nil; cancelledRecording = true
+            return [.discardRecording, .hud(.hidden)]
+
+        case .audioStopped(let samples, let ms, let speech):
+            guard let id = recording, let i = index(of: id) else { return [] }
+            recording = nil
+            guard ms >= Self.minimumMs, speech, !samples.isEmpty else {
+                queue.remove(at: i); return [.hud(.message(Strings.nothingHeard))]
+            }
+            queue[i].samples = samples; queue[i].audioMs = ms; queue[i].stage = .transcribing
+            return [.transcribe(id), .hud(.transcribing(progress: nil))]
+
+        case .transcribed(let id, let text, let language, let ms):
+            guard let i = index(of: id) else { return [] }
+            queue[i].samples = []
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { queue.remove(at: i); return [.hud(.message(Strings.nothingHeard))] }
+            queue[i].raw = trimmed; queue[i].language = language; queue[i].asrMs = ms; queue[i].stage = .refining
+            return [.refine(id), .hud(.cleaning)]
+
+        case .transcriptionFailed(let id):
+            queue.removeAll { $0.clientId == id }
+            return [.hud(.message(Strings.nothingHeard))]
+
+        case .refined(let id, let result):
+            guard let i = index(of: id) else { return [] }
+            var effects: [Effect] = []
+            switch result {
+            case .cleaned(let t): queue[i].cleaned = t
+            case .literal: queue[i].cleaned = nil
+            case .rawFallback(let r): queue[i].fallback = r; queue[i].cleaned = nil
+                effects.append(.hud(.message(r == .unauthorized ? Strings.tokenInvalid : Strings.pastedRaw)))
+            }
+            queue[i].stage = .readyToInsert
+            return insertHeadIfReady() + effects
+
+        case .inserted(let id, let how):
+            guard let i = index(of: id) else { return [] }
+            let preview = queue[i].textToInsert
+            queue.remove(at: i)
+            var effects: [Effect] = [.reportInjected(id, how)]
+            let next = insertHeadIfReady()
+            effects += next
+            if next.isEmpty { effects.append(.hud(.done(preview: preview))) }
+            return effects
+
+        case .insertFailed(let id):
+            queue.removeAll { $0.clientId == id }
+            return [.hud(.message(Strings.secureField))] + insertHeadIfReady()
+        }
+    }
+
+    private func index(of id: UUID) -> Int? { queue.firstIndex { $0.clientId == id } }
+
+    /// Only the head of the queue may paste, and only once its text is ready and nothing else is inserting.
+    private mutating func insertHeadIfReady() -> [Effect] {
+        guard let head = queue.first, head.stage == .readyToInsert, let text = head.textToInsert else { return [] }
+        queue[0].stage = .inserting
+        return [.insert(head.clientId, text)]
+    }
+}
