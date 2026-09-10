@@ -115,7 +115,10 @@ when the menu opens (the app delegate starts the coordinator).
 - `docs/API.md` — the client/server contract (every route, body, error shape, fallback enum).
 - `docs/superpowers/plans/2026-09-09-voice-server.md`, `…-voice-mac.md` — the two implementation
   plans that were executed.
-- `deploy/VPS.md` — operations runbook. `README.md` (repo root) — install, manual checklist, privacy notes.
+- `deploy/VPS.md` — operations runbook, and `GO_LIVE.md` — the go-live steps. Both are kept out of
+  the public repository (local only) because they carry host, SSH and reverse-proxy details;
+  references to them elsewhere in this file point at those local copies.
+- `README.md` (repo root) — install, manual checklist, privacy notes.
 
 ## 5. How to run things
 

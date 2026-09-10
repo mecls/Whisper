@@ -10,3 +10,7 @@ mac/**/xcuserdata/
 mac/**/DerivedData/
 mac/.build/
 mac/build/
+
+# Local-only ops runbooks — contain VPS/SSH details, never commit to the public repo
+GO_LIVE.md
+deploy/VPS.md

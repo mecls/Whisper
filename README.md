@@ -106,7 +106,8 @@ Tasks 1–8 below verify behavior that cannot be tested automatically. Run them 
 
 ## Server
 
-See [deploy/VPS.md](deploy/VPS.md) for the full runbook: deployment, backup, rollback, and user management.
+The full operations runbook — deployment, backup, rollback, and user management — is kept
+outside this repository (`deploy/VPS.md`, local only) because it contains host and SSH details.
 
 **Issuing a token for a teammate:**
 
