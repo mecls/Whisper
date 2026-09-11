@@ -18,7 +18,7 @@ final class DictationMachineTests: XCTestCase {
         XCTAssertEqual(m.handle(.audioStopped(samples: [0.1, 0.2], ms: 1200, speech: true)), [.transcribe(id), .hud(.transcribing(progress: nil))])
         XCTAssertEqual(m.handle(.transcribed(id, text: "olá", language: "pt", ms: 900)), [.refine(id), .hud(.cleaning)])
         XCTAssertEqual(m.handle(.refined(id, .cleaned("Olá."))), [.insert(id, "Olá.")])
-        XCTAssertEqual(m.handle(.inserted(id, .cleaned)), [.reportInjected(id, .cleaned), .hud(.done(preview: "Olá."))])
+        XCTAssertEqual(m.handle(.inserted(id, .cleaned)), [.reportInjected(id, .cleaned), .hud(.done(preview: "Olá.", via: Strings.viaCleaned))])
         XCTAssertTrue(m.queue.isEmpty)
     }
 
@@ -56,7 +56,7 @@ final class DictationMachineTests: XCTestCase {
         XCTAssertEqual(m.handle(.refined(b, .cleaned("B."))), [])
         XCTAssertEqual(m.handle(.refined(a, .cleaned("A."))), [.insert(a, "A.")])
         XCTAssertEqual(m.handle(.inserted(a, .cleaned)), [.reportInjected(a, .cleaned), .insert(b, "B.")])
-        XCTAssertEqual(m.handle(.inserted(b, .cleaned)), [.reportInjected(b, .cleaned), .hud(.done(preview: "B."))])
+        XCTAssertEqual(m.handle(.inserted(b, .cleaned)), [.reportInjected(b, .cleaned), .hud(.done(preview: "B.", via: Strings.viaCleaned))])
     }
 
     func testRawFallbackPastesRawAndReportsRaw() {
@@ -66,7 +66,7 @@ final class DictationMachineTests: XCTestCase {
         _ = m.handle(.audioStopped(samples: [1], ms: 1000, speech: true))
         _ = m.handle(.transcribed(id, text: "raw text", language: "en", ms: 1))
         XCTAssertEqual(m.handle(.refined(id, .rawFallback(.offline))), [.insert(id, "raw text"), .hud(.message(Strings.pastedRaw))])
-        XCTAssertEqual(m.handle(.inserted(id, .raw)), [.reportInjected(id, .raw), .hud(.done(preview: "raw text"))])
+        XCTAssertEqual(m.handle(.inserted(id, .raw)), [.reportInjected(id, .raw), .hud(.done(preview: "raw text", via: nil))])
     }
 
     func testTranscriptionFailureDropsTheDictation() {

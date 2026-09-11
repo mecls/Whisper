@@ -18,6 +18,7 @@ export interface DictationUpsert {
   audioMs: number | null
   asrMs: number | null
   llmMs: number | null
+  totalMs: number | null
   asrModel: string | null
   llmModel: string | null
   clientVersion: string | null
@@ -39,6 +40,7 @@ export function upsertDictation(db: Db, row: DictationUpsert): { id: string } {
         injected: sql`coalesce(excluded.injected, ${dictations.injected})`,
         fallbackReason: sql`coalesce(${dictations.fallbackReason}, excluded.fallback_reason)`,
         llmMs: sql`coalesce(excluded.llm_ms, ${dictations.llmMs})`,
+        totalMs: sql`coalesce(excluded.total_ms, ${dictations.totalMs})`,
         llmModel: sql`coalesce(excluded.llm_model, ${dictations.llmModel})`,
         languageDetected: sql`coalesce(excluded.language_detected, ${dictations.languageDetected})`,
       },
@@ -49,8 +51,16 @@ export function upsertDictation(db: Db, row: DictationUpsert): { id: string } {
   return { id: got.id }
 }
 
-export function setInjected(db: Db, userId: string, clientId: string, injected: Injected): boolean {
-  const r = db.update(dictations).set({ injected })
+/**
+ * Sets the injection outcome, and `total_ms` with it when the client measured one.
+ *
+ * `total_ms` arrives here rather than on the refine call because release→paste is only known
+ * once the paste has happened, which is strictly after `/v1/refine` has already written the row.
+ * An absent `totalMs` leaves whatever is stored alone: a client that cannot measure must never
+ * blank out a measurement a previous call recorded.
+ */
+export function setInjected(db: Db, userId: string, clientId: string, injected: Injected, totalMs?: number): boolean {
+  const r = db.update(dictations).set(totalMs === undefined ? { injected } : { injected, totalMs })
     .where(and(eq(dictations.userId, userId), eq(dictations.clientId, clientId))).run()
   return r.changes > 0
 }

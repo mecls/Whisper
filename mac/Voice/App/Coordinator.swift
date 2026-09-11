@@ -22,6 +22,13 @@ final class Coordinator: ObservableObject {
 
     private var machine = DictationMachine()
     private lazy var hotkey = HotkeyMonitor(choice: Preferences.hotkey)
+    private var lastPrewarm: Date?
+    // Rule 15's clock. `pendingRelease` is stamped at `.stopRecording` and claimed by the next
+    // `.transcribe`; `releaseAt` then holds it per dictation until the paste closes it. Entries are
+    // removed on use, and a dictation that never pastes (cancelled, failed) simply leaves a stale
+    // Date that the next dictation with that id would overwrite — the map is bounded by the queue.
+    private var pendingRelease: Date?
+    private var releaseAt: [UUID: Date] = [:]
     private let recorder = AudioRecorder()
     private let injector = TextInjector()
     private let panel = HUDPanel()
@@ -103,8 +110,13 @@ final class Coordinator: ObservableObject {
             levels = []
             hotkey.setListening(true)
             try? recorder.start()
+            prewarmConnection()   // rule 19: strictly after the microphone is open
             if Preferences.sounds { NSSound(named: "Tink")?.play() }
         case .stopRecording:
+            // Rule 15: the release→paste clock starts here, before the audio engine is torn
+            // down, because stopping the recorder is part of the latency the user feels. It is held
+            // here rather than on the Dictation so the reducer stays free of wall-clock reads.
+            pendingRelease = Date()
             hotkey.setListening(false)
             let (samples, ms) = recorder.stop()
             if Preferences.sounds { NSSound(named: "Pop")?.play() }
@@ -113,6 +125,11 @@ final class Coordinator: ObservableObject {
             hotkey.setListening(false)
             recorder.discard()
         case .transcribe(let id):
+            // `.transcribe` is emitted synchronously from `.audioStopped`, which the `.stopRecording`
+            // effect above sends in the same turn — so this is the first point at which the release
+            // we just stamped has an id to belong to. Only dictations that got this far are
+            // measurable, which is exactly the set worth measuring.
+            if let r = pendingRelease { releaseAt[id] = r; pendingRelease = nil }
             guard let d = machine.queue.first(where: { $0.clientId == id }) else { return }
             let samples = d.samples
             let hint = TranscribeHint(language: Preferences.language == "auto" ? nil : Preferences.language, vocabulary: DictionaryCache.shared.terms)
@@ -142,10 +159,22 @@ final class Coordinator: ObservableObject {
                 if result == .clipboardOnly { self?.showHUD(.message(Strings.secureField)) }
             }
         case .reportInjected(let id, let how):
-            Task { await refiner.reportInjected(clientId: id, injected: how) }
+            let totalMs = releaseAt.removeValue(forKey: id).map { Int(Date().timeIntervalSince($0) * 1000) }
+            Task { await refiner.reportInjected(clientId: id, injected: how, totalMs: totalMs) }
         case .hud(let state):
             showHUD(state)
         }
+    }
+
+    /// Rules 19-21, adapted for §1a. The spec gated pre-warming on "no server call expected",
+    /// which assumed on-device cleanup was the default; with the local engine on hold the server is
+    /// the only cleanup engine, so a call is always expected. Warming on every key press would
+    /// still be pointless chatter — URLSession keeps the pooled connection alive between
+    /// dictations — so one warm a minute keeps it fresh without a steady trickle to the VPS.
+    private func prewarmConnection() {
+        if let last = lastPrewarm, Date().timeIntervalSince(last) < 60 { return }
+        lastPrewarm = Date()
+        api.prewarm()
     }
 
     private func showHUD(_ state: HUDState) {
@@ -199,5 +228,5 @@ struct FixedTextTranscriber: Transcriber {
 
 struct PassthroughRefiner: Refiner {
     func refine(_ d: Dictation, mode: String) async -> RefineResult { .literal }
-    func reportInjected(clientId: UUID, injected: Injected) async {}
+    func reportInjected(clientId: UUID, injected: Injected, totalMs: Int?) async {}
 }

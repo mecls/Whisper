@@ -8,7 +8,7 @@ struct HUDView: View {
             icon
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 13, weight: .medium))
-                if case .done(let preview) = model.state, let preview, Preferences.showTextInHUD {
+                if case .done(let preview, _) = model.state, let preview, Preferences.showTextInHUD {
                     Text(preview).font(.system(size: 11)).lineLimit(1).foregroundStyle(.secondary)
                 }
             }
@@ -26,7 +26,7 @@ struct HUDView: View {
         case .listening: Strings.listening
         case .transcribing(let p): p.map { "\(Strings.transcribing) \(Int($0 * 100)) %" } ?? Strings.transcribing
         case .cleaning: Strings.cleaning
-        case .done: Strings.done
+        case .done(_, let via): via.map { "\(Strings.done) · \($0)" } ?? Strings.done
         case .message(let m): m
         case .modelLoading(let p): "\(Strings.modelLoading) \(Int(p * 100)) %"
         }

@@ -16,6 +16,42 @@ final class RefineServiceTests: XCTestCase {
         XCTAssertEqual(r, .cleaned("Olá."))
     }
 
+    // Rules 11-14: a transcript the gate clears never reaches the network, but is still logged —
+    // the skip rate is the only signal that says whether the gate's thresholds are right.
+    func testGateSkipsCleanupEntirelyAndStillLogsIt() async {
+        let api = StubAPI()
+        api.refineResult = .success(RefineResponse(clientId: "x", cleaned: "SHOULD NOT BE USED", raw: "", model: "gemma4", llmMs: 500, fallbackReason: nil))
+        let s = RefineService(api: api, outbox: Outbox())
+        let r = await s.refine(dictation("Bom dia, a reunião está confirmada."), mode: "clean")
+        XCTAssertEqual(r, .skipped)
+        XCTAssertEqual(api.posted.count, 1, "a skipped dictation is still recorded")
+        XCTAssertEqual(api.posted.first?.llmModel, CleanupEngine.skipped)
+        XCTAssertEqual(api.posted.first?.injected, .raw)
+        XCTAssertNil(api.posted.first?.cleaned)
+    }
+
+    // A transcript that needs work must still take the server path, or the gate would be silently
+    // swallowing the cleanup the user is paying for.
+    func testDirtyTranscriptStillGoesToTheServer() async {
+        let api = StubAPI()
+        api.refineResult = .success(RefineResponse(clientId: "x", cleaned: "Olá.", raw: "hã olá", model: "gemma4", llmMs: 500, fallbackReason: nil))
+        let s = RefineService(api: api, outbox: Outbox())
+        let r = await s.refine(dictation("Hã, olá."), mode: "clean")
+        XCTAssertEqual(r, .cleaned("Olá."))
+    }
+
+    // Rule 15/18: the measurement has to reach the server, on the patch for a dictation the server
+    // already stored and on the queued entry for one it has not.
+    func testTotalMsReachesThePatch() async {
+        let api = StubAPI()
+        api.refineResult = .success(RefineResponse(clientId: "x", cleaned: "Olá.", raw: "olá", model: "gemma4", llmMs: 1, fallbackReason: nil))
+        let s = RefineService(api: api, outbox: Outbox())
+        let d = dictation("olá")
+        _ = await s.refine(d, mode: "clean")
+        await s.reportInjected(clientId: d.clientId, injected: .cleaned, totalMs: 742)
+        XCTAssertEqual(api.patchedTotalMs, [742])
+    }
+
     func testServerSideFallbackPastesServerRaw() async {
         let api = StubAPI()
         api.refineResult = .success(RefineResponse(clientId: "x", cleaned: "olá", raw: "olá", model: nil, llmMs: 0, fallbackReason: .llmBusy))
@@ -34,7 +70,7 @@ final class RefineServiceTests: XCTestCase {
         let d = dictation("olá")
         let r1 = await s.refine(d, mode: "clean")
         XCTAssertEqual(r1, .rawFallback(.offline))
-        await s.reportInjected(clientId: d.clientId, injected: .raw)   // offline: cannot patch
+        await s.reportInjected(clientId: d.clientId, injected: .raw, totalMs: nil)   // offline: cannot patch
         XCTAssertEqual(outbox.count, 1)
         api.offline = false
         api.refineResult = .success(RefineResponse(clientId: "x", cleaned: "Olá.", raw: "olá", model: "gemma4", llmMs: 1, fallbackReason: nil))

@@ -6,6 +6,10 @@ enum Strings {
     static let transcribing = "Transcribing…"
     static let cleaning = "Cleaning…"
     static let done = "Done"
+    // Rule 24: which path produced the text. A rollout affordance for tuning the gate's
+    // thresholds, not permanent UI — see the note in the spec's §4.
+    static let viaCleaned = "cleaned"
+    static let viaSkipped = "already clean"
     static let nothingHeard = "Nothing heard"
     static let cancelled = "Cancelled"
     static let pastedRaw = "Pasted raw — server slow or offline"

@@ -63,6 +63,9 @@ export function registerRefine(app: FastifyInstance, deps: AppDeps): void {
       mode: b.mode, languageSetting: b.languageSetting, languageDetected: b.languageDetected ?? null,
       appBundleId: b.context.appBundleId ?? null, appName: b.context.appName ?? null,
       audioMs: b.timing.audioMs, asrMs: b.timing.asrMs, llmMs: llmMs || null, asrModel: b.asrModel,
+      // totalMs is unknowable here: the paste happens after this call returns. The client
+      // supplies it on the follow-up PATCH, which coalesces it into this row.
+      totalMs: null,
       llmModel: usedModel, clientVersion: b.clientVersion, fallbackReason,
     })
     req.log.info({ userId: user.id, rawChars: b.raw.length, cleanedChars: cleaned.length, llmMs, model: usedModel, fallbackReason, mode: b.mode, ...logExtra }, 'refine')

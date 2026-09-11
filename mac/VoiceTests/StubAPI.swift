@@ -9,6 +9,8 @@ final class StubAPI: VoiceAPIClient {
     var meResult: Result<MeResponse, Error> = .failure(APIError.offline)
     var posted: [DictationRequest] = []
     var patched: [(UUID, Injected)] = []
+    var patchedTotalMs: [Int?] = []
+    var prewarms = 0
     var puts: [ServerSettings] = []
     var delay: UInt64 = 0
     var offline = false
@@ -24,10 +26,11 @@ final class StubAPI: VoiceAPIClient {
         if offline { throw APIError.offline }
         posted.append(body)
     }
-    func patchInjected(clientId: UUID, injected: Injected) async throws {
+    func patchInjected(clientId: UUID, injected: Injected, totalMs: Int?) async throws {
         if offline { throw APIError.offline }
-        patched.append((clientId, injected))
+        patched.append((clientId, injected)); patchedTotalMs.append(totalMs)
     }
+    func prewarm() { prewarms += 1 }
     func me() async throws -> MeResponse {
         if offline { throw APIError.offline }
         return try meResult.get()

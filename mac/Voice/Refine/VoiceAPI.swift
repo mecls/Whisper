@@ -12,6 +12,18 @@ struct RefineResponse: Decodable, Equatable {
 struct DictationRequest: Encodable {
     let clientId: String, raw: String, injected: Injected, fallbackReason: FallbackReason?, mode: String, languageSetting: String, languageDetected: String?
     let context: RefineRequest.Context, timing: RefineRequest.Timing, asrModel: String, clientVersion: String, createdAt: Int
+    /// Cleanup that did not happen on `/v1/refine`, and the release→paste measurement. The server
+    /// stored literal nulls for the first three until rule 16, which meant a dictation the client
+    /// cleaned — or deliberately did not clean — lost its text and all of its timings.
+    var cleaned: String? = nil, llmMs: Int? = nil, llmModel: String? = nil, totalMs: Int? = nil
+}
+
+/// PATCH body: the injection outcome, plus the measurement when there is one. A nil `totalMs`
+/// encodes as an explicit `null` (synthesized Encodable, same as the C3 note below), which the
+/// server's `nullish()` accepts and treats as "not measured" — leaving any stored value alone.
+struct InjectedRequest: Encodable {
+    let injected: Injected
+    var totalMs: Int? = nil
 }
 
 /// C3: `llmModel` must be OMITTED from the encoded body to clear a server-side override — sending
@@ -79,7 +91,8 @@ enum APIError: Error, Equatable { case unauthorized, server(Int), offline, timeo
 protocol VoiceAPIClient {
     func refine(_ body: RefineRequest, budgetMs: Int) async throws -> RefineResponse
     func postDictation(_ body: DictationRequest) async throws
-    func patchInjected(clientId: UUID, injected: Injected) async throws
+    func patchInjected(clientId: UUID, injected: Injected, totalMs: Int?) async throws
+    func prewarm()
     func me() async throws -> MeResponse
     func putSettings(_ s: ServerSettings) async throws
     // D3: Task 9's Dictionary tab.
@@ -111,9 +124,21 @@ final class VoiceAPI: VoiceAPIClient {
     func postDictation(_ body: DictationRequest) async throws {
         let _: Empty = try await send("POST", "/v1/dictations", body: body, timeout: 10, requestId: body.clientId)
     }
-    func patchInjected(clientId: UUID, injected: Injected) async throws {
-        let _: Empty = try await send("PATCH", "/v1/dictations/by-client/\(clientId.uuidString.lowercased())", body: ["injected": injected.rawValue], timeout: 10)
+    func patchInjected(clientId: UUID, injected: Injected, totalMs: Int?) async throws {
+        let _: Empty = try await send("PATCH", "/v1/dictations/by-client/\(clientId.uuidString.lowercased())",
+                                      body: InjectedRequest(injected: injected, totalMs: totalMs), timeout: 10)
     }
+    /// Rules 19-21: open the connection while the user is still speaking, so the TLS handshake is
+    /// not sitting in the critical path between release and paste. Fire-and-forget by construction
+    /// — no await, no result, no error surface. `/health` needs no token, which keeps the Keychain
+    /// (and its possible "allow access" dialog) off the hot path entirely.
+    func prewarm() {
+        var r = URLRequest(url: base.appendingPathComponent("health"))
+        r.httpMethod = "HEAD"
+        r.timeoutInterval = 3
+        session.dataTask(with: r) { _, _, _ in }.resume()
+    }
+
     func me() async throws -> MeResponse { try await send("GET", "/v1/me", body: nil as Empty?, timeout: 10) }
     func putSettings(_ s: ServerSettings) async throws { let _: ServerSettings = try await send("PUT", "/v1/settings", body: s, timeout: 10) }
 

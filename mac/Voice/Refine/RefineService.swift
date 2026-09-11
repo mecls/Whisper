@@ -25,6 +25,15 @@ final class RefineService: Refiner {
             await logOnly(d, injected: .raw, fallback: nil, mode: mode)
             return .literal
         }
+        // Rules 11-14: a transcript that needs nothing skips the round trip entirely. Logged like
+        // any other dictation, with `llmModel` marking it, because the skip rate is the only signal
+        // that says whether the gate's thresholds are right.
+        if let reason = SkipGate.reasonToClean(raw: raw, mode: mode, language: d.language) {
+            log.debug("cleaning: \(reason.rawValue, privacy: .public)")
+        } else {
+            await logOnly(d, injected: .raw, fallback: nil, mode: mode, llmModel: CleanupEngine.skipped)
+            return .skipped
+        }
         let budget = Budget.ms(rawChars: raw.count)
         let body = RefineRequest(clientId: d.clientId.uuidString.lowercased(), raw: raw, mode: mode, languageSetting: languageSetting, languageDetected: d.language,
                                  budgetMs: budget, context: ctx, timing: timing, asrModel: asrModel, clientVersion: VoiceAPI.version, createdAt: createdAt)
@@ -49,10 +58,10 @@ final class RefineService: Refiner {
         }
     }
 
-    func reportInjected(clientId: UUID, injected: Injected) async {
+    func reportInjected(clientId: UUID, injected: Injected, totalMs: Int?) async {
         if let (d, reason) = pendingByClientId.removeValue(forKey: clientId) {
             // The refine never completed on our side: log it (or queue it) instead of patching.
-            await logOnly(d, injected: injected, fallback: reason, mode: "clean")
+            await logOnly(d, injected: injected, fallback: reason, mode: "clean", totalMs: totalMs)
             return
         }
         // C3: PATCH 404s until a refine/dictation POST has stored the row for this clientId — this
@@ -60,14 +69,16 @@ final class RefineService: Refiner {
         // 404 here means the earlier POST itself failed; log it, do not retry.
         // G6: the error kind is useful (offline vs. 404 vs. decode failure); APIError carries no
         // transcript text, so it's fine as .public. clientId is a UUID, also fine as .public.
-        do { try await api.patchInjected(clientId: clientId, injected: injected) } catch { log.info("patch injected failed: \(String(describing: error), privacy: .public)") }
+        do { try await api.patchInjected(clientId: clientId, injected: injected, totalMs: totalMs) } catch { log.info("patch injected failed: \(String(describing: error), privacy: .public)") }
     }
 
-    private func logOnly(_ d: Dictation, injected: Injected, fallback: FallbackReason?, mode: String) async {
+    private func logOnly(_ d: Dictation, injected: Injected, fallback: FallbackReason?, mode: String,
+                         llmModel: String? = nil, totalMs: Int? = nil) async {
         // G2: pass `fallback` through as-is — literal mode calls this with `nil`, and that must reach
         // the server as `fallbackReason: null`, not get coalesced into a false ".offline".
         let entry = OutboxEntry(clientId: d.clientId, raw: d.raw ?? "", injected: injected, fallback: fallback, createdAt: d.startedAt,
-                                mode: mode, languageSetting: Preferences.language, languageDetected: d.language, app: d.app, audioMs: d.audioMs, asrMs: d.asrMs)
+                                mode: mode, languageSetting: Preferences.language, languageDetected: d.language, app: d.app, audioMs: d.audioMs, asrMs: d.asrMs,
+                                llmModel: llmModel, totalMs: totalMs)
         do { try await api.postDictation(request(for: entry)) } catch { outbox.add(entry) }
     }
 
@@ -82,6 +93,7 @@ final class RefineService: Refiner {
         DictationRequest(clientId: e.clientId.uuidString.lowercased(), raw: e.raw, injected: e.injected, fallbackReason: e.fallback, mode: e.mode,
                          languageSetting: e.languageSetting, languageDetected: e.languageDetected,
                          context: .init(appBundleId: e.app?.bundleId, appName: e.app?.name), timing: .init(audioMs: e.audioMs, asrMs: e.asrMs),
-                         asrModel: asrModel, clientVersion: VoiceAPI.version, createdAt: Int(e.createdAt.timeIntervalSince1970 * 1000))
+                         asrModel: asrModel, clientVersion: VoiceAPI.version, createdAt: Int(e.createdAt.timeIntervalSince1970 * 1000),
+                         cleaned: e.cleaned, llmMs: e.llmMs, llmModel: e.llmModel, totalMs: e.totalMs)
     }
 }

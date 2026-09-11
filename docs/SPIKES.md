@@ -90,3 +90,43 @@ Traefik registered the router on first request, confirmed via
 `"name":"voice@docker"`, `"rule":"Host(\`voice.miraside.co\`)"`, `"service":"voice"`. The
 router won't get a TLS cert until the Namecheap A record for `voice.miraside.co` exists and
 resolves (Ruling 3 in Task 10 — expected, not yet Miguel's turn at audit time).
+
+## Apple FoundationModels as the cleanup engine (2026-09-11, macOS 26.6.2, M2)
+
+Run for `tasks/prd-sub-second-dictation.md` §7 open question 1, which made this measurement the
+first task and set the bar: local must beat the 706 ms gemma4 p50 "by a clear margin", re-check the
+approach if p90 exceeds ~400 ms. Same 20 fixtures as `server/src/cli/bench.ts`
+(`BENCH_FIXTURES`), same cleanup rules as `buildSystemPrompt`, fresh `LanguageModelSession` per
+fixture (a reused session accumulates transcript context and grows unboundedly).
+
+| attempt | p50 | p90 | max | preamble/markdown leak | translated | content loss |
+|---|---|---|---|---|---|---|
+| v1: server prompt verbatim, plain string output, temp 0.1 | 583 ms | 906 ms | 1089 ms | 2/20 | 2/20 | 4/20 |
+| v2: `@Generable` structured output, few-shot, temp 0 | 718 ms | 879 ms | 995 ms | 0/20 | 2/20 | 2/20 |
+
+Model warmup (session + first respond) is **2.7 s**, so the app would need a launch-time prewarm
+exactly like the WhisperKit one.
+
+**Neither attempt is shippable, and latency is the lesser problem.**
+
+- v1 inverted meaning and translated: `preciso que envies o invoice para o cliente` →
+  `**Invoice sent to client today.**` (English, summarized, markdown, and the opposite of what was
+  said). `vinte e cinco euros às três e meia` → `Twenty-five euros at three and a half`.
+  `um so the the client wants to move the meeting to, uh, Thursday afternoon` → `Thursday afternoon`.
+  One response opened with `Sure, I can help with that. Here's the cleaned text:`.
+- v2 fixed the leakage (0/20) and got `25 euros às 3:30` exactly right, but **regurgitates the
+  few-shot examples on short inputs**: `o que achas disto` and `sim` both returned an unrelated
+  example sentence verbatim. Pasting text the user never said is worse than doing nothing, and
+  short utterances are the common case. It also left fillers untouched in 7/20 and stripped
+  Portuguese accents (`está` → `esta`, `números` → `numeros`).
+- Both attempts translate across languages despite an explicit instruction not to, which answers
+  §7 open question 2 (pt-PT quality) in the negative without needing a separate pt fixture.
+
+Consequence: **the on-device cleanup engine is not Apple FoundationModels.** The 3B on-device model
+does not follow transform-only instructions reliably enough to sit between a user's speech and their
+document. The skip gate, the `totalMs` instrumentation and the connection pre-warm from the same
+spec are independent of this and stand unchanged; the engine choice reverts to the server
+(`gemma4`, quality already validated) pending a decision on a local MLX model.
+
+Benchmarks kept at `scratchpad/fmbench.swift` and `fmbench2.swift` for re-running against a future
+OS model revision.

@@ -28,11 +28,16 @@ test('opening twice does not re-run migrations', () => {
   const dbPath = join(dir, 'voice.db')
   try {
     const first = openDb(dbPath)
+    const applied = (first.raw.prepare('select count(*) as n from _migrations').get() as { n: number }).n
     first.raw.close()
 
     const second = openDb(dbPath)
     const n = second.raw.prepare('select count(*) as n from _migrations').get() as { n: number }
-    assert.equal(n.n, 1)
+    // The invariant is that re-opening applies nothing new — not that there is any particular
+    // number of migrations. Asserting a literal count here made this test fail on every added
+    // migration, which is noise rather than signal.
+    assert.ok(applied > 0, 'first open should have applied the migrations')
+    assert.equal(n.n, applied)
     const tables = second.raw.prepare("select name from sqlite_master where type='table'").all() as { name: string }[]
     assert.ok(tables.some((t) => t.name === 'dictations'))
     second.raw.close()

@@ -1,6 +1,11 @@
 import Foundation
 
-enum RefineResult: Equatable { case cleaned(String), rawFallback(FallbackReason), literal }
+/// `.skipped` is the gate's verdict (prd-sub-second-dictation.md rules 11-14): the transcript was
+/// already clean, so no cleanup engine ran and no network round trip was spent. It inserts the raw
+/// text exactly like `.literal` does; the two are separate cases because they mean different things
+/// — `.literal` is the user's explicit choice, `.skipped` is ours, and only the second one needs to
+/// be visible (rule 24) and counted (rule 14) while the thresholds are being tuned.
+enum RefineResult: Equatable { case cleaned(String), rawFallback(FallbackReason), literal, skipped }
 
 enum MachineEvent {
     case modelReady, modelProgress(Double)
@@ -13,7 +18,7 @@ enum MachineEvent {
 
 enum HUDState: Equatable {
     case hidden, listening, transcribing(progress: Double?), cleaning
-    case done(preview: String?), message(String), modelLoading(Double)
+    case done(preview: String?, via: String?), message(String), modelLoading(Double)
 }
 
 enum Effect: Equatable {
@@ -83,6 +88,9 @@ struct DictationMachine {
             switch result {
             case .cleaned(let t): queue[i].cleaned = t
             case .literal: queue[i].cleaned = nil
+            case .skipped:
+                queue[i].cleaned = nil
+                queue[i].llmModel = CleanupEngine.skipped
             case .rawFallback(let r): queue[i].fallback = r; queue[i].cleaned = nil
                 effects.append(.hud(.message(r == .unauthorized ? Strings.tokenInvalid : Strings.pastedRaw)))
             }
@@ -92,11 +100,16 @@ struct DictationMachine {
         case .inserted(let id, let how):
             guard let i = index(of: id) else { return [] }
             let preview = queue[i].textToInsert
+            // Rule 24: which path produced this text, so the gate's decisions are visible while its
+            // thresholds are being tuned. Derived, not timed — the release→paste measurement lives
+            // in the coordinator, which keeps this reducer pure and its effects comparable in tests.
+            let via = queue[i].llmModel == CleanupEngine.skipped ? Strings.viaSkipped
+                : (queue[i].cleaned != nil ? Strings.viaCleaned : nil)
             queue.remove(at: i)
             var effects: [Effect] = [.reportInjected(id, how)]
             let next = insertHeadIfReady()
             effects += next
-            if next.isEmpty { effects.append(.hud(.done(preview: preview))) }
+            if next.isEmpty { effects.append(.hud(.done(preview: preview, via: via))) }
             return effects
 
         case .insertFailed(let id):

@@ -50,6 +50,10 @@ export const dictations = sqliteTable(
     audioMs: integer('audio_ms'),
     asrMs: integer('asr_ms'),
     llmMs: integer('llm_ms'),
+    // Release→paste, measured on the client (prd-sub-second-dictation.md rule 15). Distinct from
+    // asrMs + llmMs: it includes injection and every hop of dispatch between the stages, which is
+    // what the user actually feels and where the unexplained latency has historically hidden.
+    totalMs: integer('total_ms'),
     asrModel: text('asr_model'),
     llmModel: text('llm_model'),
     clientVersion: text('client_version'),

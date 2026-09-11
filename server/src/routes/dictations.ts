@@ -12,10 +12,11 @@ export function registerDictations(app: FastifyInstance, deps: AppDeps): void {
   r.post('/v1/dictations', { schema: { body: DictationBody, response: { 200: z.object({ id: z.string() }) } } }, async (req) => {
     const b = req.body
     return upsertDictation(deps.db, {
-      userId: req.user.id, clientId: b.clientId, createdAt: b.createdAt, raw: b.raw, cleaned: null, injected: b.injected,
+      userId: req.user.id, clientId: b.clientId, createdAt: b.createdAt, raw: b.raw, cleaned: b.cleaned, injected: b.injected,
       mode: b.mode, languageSetting: b.languageSetting, languageDetected: b.languageDetected ?? null,
       appBundleId: b.context.appBundleId ?? null, appName: b.context.appName ?? null,
-      audioMs: b.timing.audioMs, asrMs: b.timing.asrMs, llmMs: null, asrModel: b.asrModel, llmModel: null,
+      audioMs: b.timing.audioMs, asrMs: b.timing.asrMs, llmMs: b.llmMs, totalMs: b.totalMs,
+      asrModel: b.asrModel, llmModel: b.llmModel,
       clientVersion: b.clientVersion, fallbackReason: b.fallbackReason,
     })
   })
@@ -23,7 +24,7 @@ export function registerDictations(app: FastifyInstance, deps: AppDeps): void {
   r.patch('/v1/dictations/by-client/:clientId', {
     schema: { params: z.object({ clientId: z.string().min(1).max(64) }), body: InjectedBody, response: { 200: z.object({ ok: z.literal(true) }), 404: ErrorReply } },
   }, async (req, reply) => {
-    const ok = setInjected(deps.db, req.user.id, req.params.clientId, req.body.injected)
+    const ok = setInjected(deps.db, req.user.id, req.params.clientId, req.body.injected, req.body.totalMs ?? undefined)
     if (!ok) return reply.code(404).send({ error: 'not_found', message: 'No dictation with that clientId' })
     return { ok: true as const }
   })

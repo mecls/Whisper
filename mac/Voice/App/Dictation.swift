@@ -28,6 +28,13 @@ struct Dictation: Equatable {
     var fallback: FallbackReason?
     var injected: Injected?
 
+    /// Cleanup that did not happen on `/v1/refine`: `"skipped"` when the gate decided the
+    /// transcript needed nothing. Left nil when the server cleaned it — the server records its own
+    /// model and would only have to reconcile two answers. There is no client-side `llmMs` to go
+    /// with it: cleanup is server-only by decision (spec §7 2a), so the only engine that can time
+    /// itself is the one already writing the row.
+    var llmModel: String?
+
     /// What gets pasted: the cleanup when there is one, the raw transcript otherwise.
     var textToInsert: String? { cleaned ?? raw }
 
