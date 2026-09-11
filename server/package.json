@@ -12,7 +12,8 @@
     "test": "LOG_LEVEL=silent tsx --test test/*.test.ts",
     "migrate": "tsx src/db/migrate.ts",
     "users": "tsx src/cli/users.ts",
-    "bench": "tsx src/cli/bench.ts"
+    "bench": "tsx src/cli/bench.ts",
+    "seed": "tsx src/cli/seed.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13.1.1",
