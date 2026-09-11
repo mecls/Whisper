@@ -87,6 +87,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Rule 1: Voice is a regular app now — dock icon, ⌘-Tab, a real window. This must agree
         // with `LSUIElement: false` in project.yml, which AppKit reads before any of this runs.
         NSApp.setActivationPolicy(.regular)
+        // Under XCTest this process is only a host for the test bundle, and starting the OS
+        // adapters here makes the suite unrunnable: `AudioRecorder.prepare()` calls
+        // `AVAudioEngine.inputNode`, which blocks the main thread on the microphone TCC gate. The
+        // ad-hoc signature changes on every rebuild so that grant is gone every time, nobody can
+        // click Allow in an unattended run, and the test runner times out before it ever connects
+        // ("the test runner hung before establishing connection" — verified by stack sample, and
+        // reproduced identically on the commit before this feature existed).
+        //
+        // This changes nothing at runtime: XCTestCase only exists in the process when the test
+        // bundle has been injected. No test constructs Coordinator.shared — they all build their
+        // own objects — so nothing is lost by not starting it.
+        guard NSClassFromString("XCTestCase") == nil else { return }
         Coordinator.shared.start()
         if !Preferences.onboarded {
             showOnboarding()
