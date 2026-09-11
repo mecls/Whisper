@@ -7,6 +7,7 @@ import type { Db } from './db/client.js'
 import { authenticate, parseBearer, hashToken, FailedAuthLimiter, type AuthUser } from './auth.js'
 import type { LlmCaller } from './llm/client.js'
 import { Semaphore } from './llm/semaphore.js'
+import { backfillWordCounts } from './dictations-repo.js'
 import { registerRefine } from './routes/refine.js'
 import { registerDictations } from './routes/dictations.js'
 import { registerDictionary } from './routes/dictionary.js'
@@ -117,6 +118,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.addHook('onClose', () => {
     deps.db.raw.close()
   })
+
+  // Rows written before `word_count` existed have NULL there and are excluded from every word
+  // total until they are counted (rule 7). Non-fatal on purpose: a table that is only partly
+  // backfilled understates the headline number, which is visibly wrong and fixes itself on the
+  // next boot — refusing to start would mean not accepting dictations at all, which is worse.
+  try {
+    const filled = backfillWordCounts(deps.db)
+    if (filled > 0) app.log.info({ filled }, 'backfilled word_count')
+  } catch (err) {
+    app.log.error({ err }, 'word_count backfill failed; totals will understate until the next boot')
+  }
 
   // Per-user llmModel override (settings) must be wired before refine reads it.
   deps.settingsFor ??= (userId) => getSettings(deps.db, userId)
