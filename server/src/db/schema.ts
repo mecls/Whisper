@@ -54,6 +54,12 @@ export const dictations = sqliteTable(
     // asrMs + llmMs: it includes injection and every hop of dispatch between the stages, which is
     // what the user actually feels and where the unexplained latency has historically hidden.
     totalMs: integer('total_ms'),
+    // Words in the text that was actually pasted — `cleaned` when there is one, `raw` otherwise
+    // (prd-insights-dashboard.md rules 5-7). Stored rather than computed on read so the insights
+    // endpoint never has to SELECT a transcript column in order to count it, which is what makes
+    // "no transcript text ever leaves the server" structural instead of a matter of care.
+    // Nullable: NULL means "not counted yet" and is excluded from totals, never summed as zero.
+    wordCount: integer('word_count'),
     asrModel: text('asr_model'),
     llmModel: text('llm_model'),
     clientVersion: text('client_version'),
