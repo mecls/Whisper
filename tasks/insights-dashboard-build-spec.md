@@ -321,6 +321,14 @@ purpose is unchanged and still tested: an unknown zone is a 400 and never a sile
   labelled baseline commit on this branch. Nine commits layered on top of twenty dirty files would
   have made every diff unreadable. Nothing in it was modified.
 
+- **`AppDelegate` skips starting the OS adapters under XCTest.** Not a decision the spec left open
+  so much as one it could not have anticipated: the Mac suite could not run at all, on this machine,
+  before this feature existed. `Coordinator.start()` → `AudioRecorder.prepare()` →
+  `AVAudioEngine.inputNode` blocks the main thread on the microphone TCC gate, the ad-hoc signature
+  loses that grant on every rebuild, and XCTest times out with zero tests executed. Verified by
+  stack sample and reproduced on the commit before this branch. The guard changes nothing at
+  runtime and no test constructs `Coordinator.shared`. Without it there is no way to satisfy §17.
+
 ### Not built, because §2 excludes it
 
 Percentile or "top X%" comparisons; sharing or export; a "Your voice" tab; transcript history,
