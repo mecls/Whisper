@@ -10,6 +10,7 @@ import { Semaphore } from './llm/semaphore.js'
 import { backfillWordCounts } from './dictations-repo.js'
 import { registerRefine } from './routes/refine.js'
 import { registerDictations } from './routes/dictations.js'
+import { registerInsights } from './routes/insights.js'
 import { registerDictionary } from './routes/dictionary.js'
 import { registerMe } from './routes/me.js'
 import { registerSettings, getSettings } from './routes/settings.js'
@@ -140,6 +141,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.after(() => {
     registerRefine(app, deps)
     registerDictations(app, deps)
+    registerInsights(app, deps)
     registerDictionary(app, deps)
     registerMe(app, deps)
     registerSettings(app, deps)

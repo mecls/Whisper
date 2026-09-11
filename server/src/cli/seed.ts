@@ -167,7 +167,8 @@ for (const [i, p] of chosen.entries()) {
 const activeDays = new Set(chosen.map((c) => c.offset)).size
 console.log(
   `seeded ${chosen.length} dictations for ${name} across ${activeDays} active days in the last ${weeks} weeks ` +
-    `(current streak ${streakDays} days, a ${gapEnd - gapStart}-day gap ${gapStart} days back)`,
+    `(the last ${streakDays} days are never empty, so the streak is at least that; ` +
+    `a ${gapEnd - gapStart}-day gap ${gapStart} days back stops the longest streak being the whole window)`,
 )
 console.log(`database: ${env.databasePath()}`)
 db.raw.close()
