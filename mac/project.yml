@@ -40,7 +40,12 @@ targets:
         CFBundleDisplayName: Voice
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
-        LSUIElement: true
+        # Voice is a regular app now, with a dock icon and an Insights window
+        # (prd-insights-dashboard.md rule 1). This and AppDelegate's
+        # NSApp.setActivationPolicy(.regular) must always change together: this key is
+        # read from Info.plist before any of our code runs, so the two disagreeing gives
+        # a dock icon that flickers in at launch or never appears at all.
+        LSUIElement: false
         LSMinimumSystemVersion: "15.0"
         NSMicrophoneUsageDescription: "Voice records your speech while you hold the dictation key. Audio never leaves this Mac."
         NSHumanReadableCopyright: "Miraside"

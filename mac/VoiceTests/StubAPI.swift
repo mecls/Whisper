@@ -11,6 +11,8 @@ final class StubAPI: VoiceAPIClient {
     var patched: [(UUID, Injected)] = []
     var patchedTotalMs: [Int?] = []
     var prewarms = 0
+    var insightsResult: Result<Insights, Error> = .failure(APIError.offline)
+    var insightsCalls: [(tz: String, weeks: Int)] = []
     var puts: [ServerSettings] = []
     var delay: UInt64 = 0
     var offline = false
@@ -31,6 +33,12 @@ final class StubAPI: VoiceAPIClient {
         patched.append((clientId, injected)); patchedTotalMs.append(totalMs)
     }
     func prewarm() { prewarms += 1 }
+    func insights(tz: String, weeks: Int) async throws -> Insights {
+        if offline { throw APIError.offline }
+        insightsCalls.append((tz, weeks))
+        if delay > 0 { try await Task.sleep(nanoseconds: delay) }
+        return try insightsResult.get()
+    }
     func me() async throws -> MeResponse {
         if offline { throw APIError.offline }
         return try meResult.get()

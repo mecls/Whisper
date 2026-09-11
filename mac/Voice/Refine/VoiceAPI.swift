@@ -93,6 +93,7 @@ protocol VoiceAPIClient {
     func postDictation(_ body: DictationRequest) async throws
     func patchInjected(clientId: UUID, injected: Injected, totalMs: Int?) async throws
     func prewarm()
+    func insights(tz: String, weeks: Int) async throws -> Insights
     func me() async throws -> MeResponse
     func putSettings(_ s: ServerSettings) async throws
     // D3: Task 9's Dictionary tab.
@@ -139,6 +140,14 @@ final class VoiceAPI: VoiceAPIClient {
         session.dataTask(with: r) { _, _, _ in }.resume()
     }
 
+    /// The dashboard's only call. `tz` is the Mac's current zone, so the day buckets match the
+    /// calendar the user actually lives in; the server rejects a zone it cannot format with rather
+    /// than falling back to UTC and handing back a plausible wrong streak.
+    func insights(tz: String, weeks: Int) async throws -> Insights {
+        try await send("GET", "/v1/insights", body: nil as Empty?, timeout: 10,
+                       query: [URLQueryItem(name: "tz", value: tz), URLQueryItem(name: "weeks", value: String(weeks))])
+    }
+
     func me() async throws -> MeResponse { try await send("GET", "/v1/me", body: nil as Empty?, timeout: 10) }
     func putSettings(_ s: ServerSettings) async throws { let _: ServerSettings = try await send("PUT", "/v1/settings", body: s, timeout: 10) }
 
@@ -156,10 +165,17 @@ final class VoiceAPI: VoiceAPIClient {
 
     private struct Empty: Codable {}
 
-    private func send<B: Encodable, R: Decodable>(_ method: String, _ path: String, body: B?, timeout: TimeInterval, requestId: String? = nil) async throws -> R {
+    private func send<B: Encodable, R: Decodable>(_ method: String, _ path: String, body: B?, timeout: TimeInterval, requestId: String? = nil, query: [URLQueryItem] = []) async throws -> R {
         // G4: resolve off the calling actor before building the request.
         let token = await Task.detached(priority: .userInitiated) { [tokenProvider] in tokenProvider() }.value
-        var req = URLRequest(url: base.appendingPathComponent(path), timeoutInterval: timeout)
+        // Built through URLComponents rather than appended to the path: `appendingPathComponent`
+        // percent-encodes `?` and `&`, which would turn a query into a nonsense path segment.
+        var url = base.appendingPathComponent(path)
+        if !query.isEmpty, var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            comps.queryItems = query
+            url = comps.url ?? url
+        }
+        var req = URLRequest(url: url, timeoutInterval: timeout)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.setValue("miraside-voice/\(Self.version)", forHTTPHeaderField: "user-agent")

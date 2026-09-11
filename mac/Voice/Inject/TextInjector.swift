@@ -14,12 +14,33 @@ final class TextInjector: NSObject, NSPasteboardItemDataProvider {
     private var ceiling: DispatchWorkItem?
     private var wasRead = false
 
-    func insert(_ text: String, completion: @escaping (InsertResult) -> Void) {
+    /// Voice's own bundle id, read from the bundle rather than written twice, so it stays correct
+    /// if `PRODUCT_BUNDLE_IDENTIFIER` ever changes. The literal is only a fallback for contexts
+    /// where there is no main bundle identifier at all.
+    static var ownBundleId: String { Bundle.main.bundleIdentifier ?? "co.miraside.voice" }
+
+    /// Whether this dictation must go to the clipboard instead of being pasted.
+    ///
+    /// Two reasons, and they are different in kind. A secure field (password prompts, some
+    /// terminals) cannot receive a synthetic ⌘V at all. Voice's own window can — which is exactly
+    /// the problem: now that Voice has a dock icon and a real window, dictating while Insights is
+    /// frontmost would type the transcript into Voice instead of wherever the user meant it to go,
+    /// and the text would be gone by the time they noticed.
+    ///
+    /// An unknown target (nil bundle id) pastes as it always has. Treating "I don't know which app"
+    /// as "it might be me" would send ordinary dictations to the clipboard for no reason.
+    static func mustUseClipboard(targetBundleId: String?, secureInputActive: Bool) -> Bool {
+        if secureInputActive { return true }
+        guard let targetBundleId else { return false }
+        return targetBundleId == ownBundleId
+    }
+
+    func insert(_ text: String, targetBundleId: String? = nil, completion: @escaping (InsertResult) -> Void) {
         // A7: the reducer never issues a second `.insert` before `.inserted`, but stay safe — a stale
         // paste is closed (its snapshot restored) before a new one starts.
         if pending != nil { finish(.pastedUnconfirmed) }
         let pb = NSPasteboard.general
-        if SecureInput.isActive {
+        if Self.mustUseClipboard(targetBundleId: targetBundleId, secureInputActive: SecureInput.isActive) {
             pb.prepareForNewContents(with: .currentHostOnly)
             pb.setString(text, forType: .string)
             // Dispatched, not called inline: keeps this callback out of the coordinator's effect-loop

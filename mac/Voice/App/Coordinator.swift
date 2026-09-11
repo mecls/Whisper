@@ -47,6 +47,9 @@ final class Coordinator: ObservableObject {
     // listTerms/addTerm/deleteTerm directly.
     lazy var api = VoiceAPI(base: URL(string: Preferences.serverURL)!, tokenProvider: { Keychain.token(for: Preferences.serverURL) })
     lazy var sync = SyncService(api: api)
+    /// The Insights window's model. Lazy and owned here so the window can be closed and reopened
+    /// without losing the numbers already on screen, or re-reading the cache from disk each time.
+    lazy var insights = InsightsModel(api: api)
 
     func start() {
         if !Permissions.inputMonitoringGranted() || !Permissions.accessibilityGranted(prompt: false) {
@@ -153,7 +156,11 @@ final class Coordinator: ObservableObject {
             }
         case .insert(let id, let text):
             lastText = text
-            injector.insert(text) { [weak self] result in
+            // The app that was frontmost when the hotkey went down, not whatever is frontmost now:
+            // the paste is aimed at where the user was typing. When that app is Voice itself, the
+            // injector routes to the clipboard instead of typing into our own window.
+            let target = machine.queue.first { $0.clientId == id }?.app?.bundleId
+            injector.insert(text, targetBundleId: target) { [weak self] result in
                 let how: Injected = result == .clipboardOnly ? .clipboard : (self?.machine.queue.first { $0.clientId == id }?.cleaned == nil ? .raw : .cleaned)
                 self?.send(.inserted(id, how))
                 if result == .clipboardOnly { self?.showHUD(.message(Strings.secureField)) }

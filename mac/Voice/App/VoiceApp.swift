@@ -39,6 +39,7 @@ struct VoiceApp: App {
             }.disabled(coordinator.lastText == nil)
             Button(coordinator.paused ? Strings.resume : Strings.pause) { coordinator.paused.toggle() }
             Divider()
+            Button(Strings.insightsMenuItem) { openWindow(id: "insights"); NSApp.activate(ignoringOtherApps: true) }
             Button(Strings.setUpPermissions) { openWindow(id: "onboarding"); NSApp.activate(ignoringOtherApps: true) }
             SettingsLink { Text(Strings.settings) }
             Divider()
@@ -46,8 +47,25 @@ struct VoiceApp: App {
         }
         .menuBarExtraStyle(.menu)
 
+        // Declared before onboarding so it is the app's main window. `defaultLaunchBehavior` is
+        // explicit on both: now that Voice is `.regular`, a Window scene can present itself at
+        // launch, and the one that does must be Insights and never the onboarding sheet.
+        Window(Strings.insightsTitle, id: "insights") {
+            InsightsView(model: Coordinator.shared.insights)
+                .onAppear {
+                    // The only place `openWindow` exists is inside a view. Hand it to the router so
+                    // AppDelegate can reopen this window from a dock click, long after this view
+                    // has gone away.
+                    WindowRouter.open = { openWindow(id: $0) }
+                }
+        }
+        .defaultSize(width: 900, height: 620)
+        .windowResizability(.contentMinSize)
+        .defaultLaunchBehavior(.presented)
+
         Window(Strings.onboardingTitle, id: "onboarding") { OnboardingView(coordinator: coordinator) }
             .windowResizability(.contentSize)
+            .defaultLaunchBehavior(.suppressed)
 
         // D4: SettingsView reads Coordinator.shared directly rather than the @ObservedObject
         // instances above, since a Settings scene's content closure is built fresh each time the
@@ -66,11 +84,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Preferences.registerDefaults()
-        NSApp.setActivationPolicy(.accessory)
+        // Rule 1: Voice is a regular app now — dock icon, ⌘-Tab, a real window. This must agree
+        // with `LSUIElement: false` in project.yml, which AppKit reads before any of this runs.
+        NSApp.setActivationPolicy(.regular)
         Coordinator.shared.start()
         if !Preferences.onboarded {
             showOnboarding()
         }
+    }
+
+    /// Closing the Insights window must not quit Voice (rule 4). Voice is a dictation service that
+    /// happens to have a window; quitting on close would silently stop the hotkey working and the
+    /// user would have no reason to connect the two events.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Clicking the dock icon with no window open brings Insights back (rule 5). Without this the
+    /// dock icon is inert once the window is closed, which reads as a broken app.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { WindowRouter.openInsights() }
+        NSApp.activate(ignoringOtherApps: true)
+        return true
     }
 
     func showOnboarding() {
@@ -87,5 +120,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+/// Opens SwiftUI `Window` scenes from places that have no view context — `AppDelegate`, mainly.
+///
+/// `openWindow` only exists inside a view, so the Insights scene hands its own action over on
+/// first appearance and this holds it for later. The action stays valid after the window is
+/// closed, which is exactly the case that matters: the dock icon has to reopen a window that is
+/// no longer there. The fallback covers the window between launch and that first appearance.
+@MainActor
+enum WindowRouter {
+    static var open: ((String) -> Void)?
+
+    static func openInsights() {
+        if let open {
+            open("insights")
+        } else if let existing = NSApp.windows.first(where: { $0.identifier?.rawValue.contains("insights") == true }) {
+            existing.makeKeyAndOrderFront(nil)
+        }
     }
 }

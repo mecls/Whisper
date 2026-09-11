@@ -278,6 +278,56 @@ Decisions already made for you, so you do not re-litigate them:
 - The heatmap scrolls horizontally at narrow widths rather than dropping weeks.
 - Cleanup is server-only — do not add an on-device LLM path. See `tasks/prd-sub-second-dictation.md` §1a for the measurements that settled it.
 
+### Decisions taken during the build
+
+**One deviation from a stated rule.** §6 rule 3 and PRD rule 7 both say to validate `tz` against
+`Intl.supportedValuesOf('timeZone')`. Measured on this Node build, that list is 418 canonical zones
+and excludes `UTC`, every `Etc/*` zone, and every alias (`Asia/Calcutta`, `America/Buenos_Aires`).
+Validating against it returns 400 for zones the very next line formats perfectly well — validation
+and use would disagree about what a valid zone is. `tz` is instead validated by constructing the
+`Intl.DateTimeFormat` the handler then uses, which makes them the same question. The rule's actual
+purpose is unchanged and still tested: an unknown zone is a 400 and never a silent fallback to UTC.
+
+- **`tz` defaults to `UTC` when the parameter is absent** — AC-6 calls the endpoint without one, and
+  an absent parameter is not the typo rule 3 exists to catch.
+- **The app breakdown covers all history, not the `weeks` window** — rule 10 names the heatmap as the
+  only windowed thing, and a top-apps list that changed with the heatmap slider would be a second,
+  unstated window.
+- **`Other` is omitted when nothing overflows into it** — a row reading "Other 0%" is noise.
+- **App ranking ties break on label** — otherwise two apps with equal counts reorder between requests
+  for no reason the user could explain.
+- **Shares use largest-remainder rounding** — rounding each independently sums to 98 or 101, and rule
+  12 requires exactly 100.
+- **The heatmap derives each day's weekday from its date, not its index in the list** — a cached
+  response that does not begin on a Sunday then still lands every day in the right row instead of
+  shifting the whole grid by one.
+- **`WindowRouter` holds the SwiftUI `openWindow` action** — `AppDelegate` has no view context, so
+  the Insights scene hands its action over on first appearance and the dock-click reopen uses it.
+- **`defaultLaunchBehavior` is explicit on both `Window` scenes** — `.presented` on Insights,
+  `.suppressed` on onboarding. Once the app is `.regular` a `Window` scene can present itself at
+  launch, and the one that does must not be the onboarding sheet.
+- **`backfillWordCounts` chunks at 500 rows** — bounded memory on a large table, one transaction per
+  chunk, and a short final batch ends the loop without an extra query.
+- **`npm run seed` guards on "resolves under the current working directory"** rather than a blocklist
+  of known deploy paths, so it stays correct when the deploy path changes. It is idempotent through
+  deterministic `seed-<n>` client ids going through the ordinary upsert, which keeps §7's "no delete
+  path" intact — re-running with a smaller `--dictations` leaves the surplus rows, and the summary
+  line says so.
+- **The cache write happens off the main actor** — the window is on screen and a disk write has no
+  business in front of it, however small.
+- **Overlapping refreshes collapse to one request** — a second in-flight refresh could only race the
+  first to write the cache.
+- **The pre-existing uncommitted sub-second-dictation work was committed first**, as a single
+  labelled baseline commit on this branch. Nine commits layered on top of twenty dirty files would
+  have made every diff unreadable. Nothing in it was modified.
+
+### Not built, because §2 excludes it
+
+Percentile or "top X%" comparisons; sharing or export; a "Your voice" tab; transcript history,
+search or re-paste; a "fixes made" card. None were started. The one that felt most useful mid-build
+was transcript history — it is also the one §10 most clearly forbids, since it would put transcripts
+on screen and in the cache file.
+
 ## 17. Definition of Done
 
 > `cd server && npm test` and `cd mac && xcodegen generate && xcodebuild test -project Voice.xcodeproj -scheme Voice -destination 'platform=macOS,arch=arm64'` both report **0 failures** with every scenario in §13 covered by a named test; a Release build of `Voice.app` succeeds; `npm run seed` followed by launching the app against a local server renders all four cards populated; and the human-only checks are written into `GO_LIVE.md` §3.

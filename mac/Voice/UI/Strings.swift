@@ -31,6 +31,24 @@ enum Strings {
     static let langEn = "English"
 
     static let setUpPermissions = "Set up permissions…"
+
+    // Insights window
+    static let insightsTitle = "Insights"
+    static let insightsMenuItem = "Insights…"
+    static let insightsRefresh = "Refresh"
+    static let insightsEmpty = "Dictations will appear here once you start using Voice."
+    static let cardTotalWords = "Total words"
+    static let cardTotalWordsCaption = "total words"
+    static let cardWpm = "Words per minute"
+    static let cardWpmCaption = "words per minute"
+    static let cardStreak = "Streak"
+    static let cardApps = "Apps"
+    static let noValue = "—"
+    static func dayStreak(_ n: Int) -> String { n == 1 ? "1 day streak" : "\(n) day streak" }
+    static func longestStreak(_ n: Int) -> String { "longest: \(n) days" }
+    static func lastUpdated(_ relative: String) -> String { "Last updated \(relative) · couldn't reach the server" }
+    static let lastUpdatedNever = "Couldn't reach the server"
+    static let tokenInvalidInsights = "Token invalid — open Settings › Server"
     static let modelReady = "Model: ready"
     static func modelError(_ message: String) -> String { "Model error: \(message)" }
     static let modelLabelTurbo = "Large v3 Turbo (compressed, 630 MB) — recommended"
