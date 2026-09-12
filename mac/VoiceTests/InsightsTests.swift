@@ -155,6 +155,9 @@ final class InsightsTests: XCTestCase {
 
     private func tempCache() -> InsightsCache {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+        // Removed afterwards: every call used to leave a directory behind in the system temp
+        // folder, and a run touches this helper a dozen times.
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
         return InsightsCache(url: dir.appendingPathComponent("insights-cache.json"))
     }
 
@@ -172,6 +175,17 @@ final class InsightsTests: XCTestCase {
     func testACorruptCacheIsTreatedAsAbsent() {
         // Rule: parse failure -> loading state -> refresh. Never a crash, never a parse error on
         // screen. One refresh is the whole cost of a bad file.
+        //
+        // NOTE: this test is *why* every run of the suite prints
+        //
+        //     [insights-cache] discarding unreadable insights cache: DecodingError.dataCorrupted …
+        //     "Unexpected character 't' around line 1, column 4." NSJSONSerializationErrorIndex=3
+        //
+        // That line is this test passing — `load()` reporting that it threw a bad file away, which
+        // is the behaviour being asserted two lines below. It is not a fault in the app and it says
+        // nothing about the real cache in Application Support. It was mistaken for a live bug more
+        // than once before anyone matched the bytes: that index-3 't' is the `t` of "this" in the
+        // corrupt fixture on the next line, and nothing else in the codebase produces it.
         let cache = tempCache()
         try? FileManager.default.createDirectory(at: cache.url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? Data("{ this is not json".utf8).write(to: cache.url)
@@ -265,6 +279,14 @@ final class InsightsTests: XCTestCase {
         model.refresh()
         await waitUntil { model.presentation.notice == .none && !api.insightsCalls.isEmpty }
         XCTAssertEqual(api.insightsCalls.count, 1)
+        // The refresh succeeded, so it started a cache write. Left in flight it outlives this test
+        // and recreates the temp directory teardown has already removed.
+        //
+        // Waiting for the write to *exist* first is the point: the assertion above is satisfied as
+        // soon as the request has been made, which is 40 ms before the stub answers and well before
+        // `pendingSave` is assigned. Awaiting it there awaits nil and does nothing.
+        await waitUntil { model.pendingSave != nil }
+        await model.pendingSave?.value
     }
 
     // MARK: - Formatting

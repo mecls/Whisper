@@ -19,6 +19,13 @@ final class InsightsModel: ObservableObject {
     private var isRefreshing = false
     private var failure: APIError?
     private var inFlight: Task<Void, Never>?
+    /// The cache write started by the last successful refresh.
+    ///
+    /// Held rather than discarded so it can be awaited. In the app nothing does — the write is
+    /// deliberately fire-and-forget, off the main actor and behind the window. In tests, a detached
+    /// write that outlives the test it belongs to recreates the temp directory teardown has just
+    /// removed, which is how it was found.
+    private(set) var pendingSave: Task<Void, Never>?
 
     init(api: VoiceAPIClient, cache: InsightsCache = .default) {
         self.api = api
@@ -50,7 +57,7 @@ final class InsightsModel: ObservableObject {
                 let cache = self.cache
                 // Off the main actor: the window is on screen and a disk write has no business
                 // being in front of it, however small.
-                Task.detached(priority: .utility) { cache.save(fresh) }
+                pendingSave = Task.detached(priority: .utility) { cache.save(fresh) }
             } catch let error as APIError {
                 failure = error
             } catch {
