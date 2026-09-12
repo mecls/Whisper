@@ -28,7 +28,12 @@ enum Strings {
     static let copyLast = "Copy last dictation"
     static let pause = "Pause dictation"
     static let resume = "Resume dictation"
+    /// For controls that *open* the settings window — the menu item and the `SettingsLink`s. The
+    /// ellipsis is the platform's promise that more UI follows the click.
     static let settings = "Settings…"
+    /// For the sidebar row, which reveals settings in place rather than opening anything. An
+    /// ellipsis there would promise a window that never appears.
+    static let settingsNav = "Settings"
     static let quit = "Quit Voice"
     static let mode = "Mode"
     static let language = "Language"

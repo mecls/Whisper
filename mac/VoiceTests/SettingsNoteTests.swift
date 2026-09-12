@@ -17,16 +17,52 @@ import XCTest
 /// measuring the layout found it. So the measurement is the test.
 final class SettingsNoteTests: XCTestCase {
 
-    /// The detail pane's share of the smallest window `MainWindow` allows (720) once the sidebar
-    /// (up to 220) and the pane's own 20-point padding are taken out. A caption wider than this
-    /// cannot be laid out in the smallest window the user can make.
-    private let detailBudget: CGFloat = 720 - 220 - 40
-
     @MainActor
     private func idealSize<V: View>(of view: V) -> CGSize {
         let host = NSHostingView(rootView: view)
         host.layoutSubtreeIfNeeded()
         return host.fittingSize
+    }
+
+    /// What a `TabView` takes horizontally before its content is offered any width at all.
+    ///
+    /// Measured, not assumed. The settings panes used to sit directly in the detail pane under a
+    /// 20-point padding we chose; they are now inside `SettingsTabs`, and the inset is AppKit's to
+    /// pick. Writing today's number in as a literal is exactly how this guard would keep passing
+    /// while the thing it guards against came back on a future macOS.
+    @MainActor
+    private var tabViewHorizontalInset: CGFloat {
+        let content = Color.clear.frame(width: 200, height: 40)
+        let tabbed = idealSize(of: TabView {
+            content.tabItem { Label(Strings.settingsTabGeneral, systemImage: "gear") }
+        })
+        return max(0, tabbed.width - idealSize(of: content).width)
+    }
+
+    /// What a pane's own `.padding()` takes. Every tab body ends with one, *inside* the tab
+    /// chrome, so a caption is offered the pane width minus both and neither can be left out.
+    @MainActor
+    private var panePadding: CGFloat {
+        let content = Color.clear.frame(width: 200, height: 40)
+        return max(0, idealSize(of: content.padding()).width - idealSize(of: content).width)
+    }
+
+    /// The detail pane's share of the smallest window `MainWindow` allows (720), once the widest
+    /// the sidebar can be dragged (220), the tab chrome, and the pane's own padding are taken out.
+    /// A caption wider than this cannot be laid out in the smallest window the user can make.
+    @MainActor
+    private var detailBudget: CGFloat { 720 - 220 - tabViewHorizontalInset - panePadding }
+
+    /// Records the headroom the layout actually leaves. Moving the panes inside a `TabView` traded
+    /// a padding we chose for chrome AppKit chooses; if that chrome ever grows enough to swallow
+    /// the budget, this fails with both numbers attached rather than leaving the next caption
+    /// author to rediscover it as a blank window.
+    @MainActor
+    func testTheTabChromeLeavesRoomForACaption() {
+        XCTAssertGreaterThan(
+            detailBudget, SettingsNote.idealWidth,
+            "TabView chrome takes \(tabViewHorizontalInset)pt, leaving a \(detailBudget)pt budget — under SettingsNote's \(SettingsNote.idealWidth)pt ideal width. Captions no longer fit the smallest window."
+        )
     }
 
     @MainActor

@@ -5,8 +5,13 @@ import SwiftUI
 /// Settings used to live only in the standard `Settings` scene behind ⌘,. That is the right place
 /// for a menu-bar utility, and the wrong one for an app with a dock icon and a window — it means
 /// everything the app can do is hidden behind a keyboard shortcut, and the window itself is a
-/// read-only dashboard you visit once. Flattening the five settings tabs into the sidebar makes the
-/// window the app rather than a report about it.
+/// read-only dashboard you visit once. Putting settings in the window makes the window the app
+/// rather than a report about it.
+///
+/// The sidebar names the two things the window is, not the six screens it contains. The five
+/// settings panes were briefly sidebar rows of their own, which made a five-item list out of a
+/// single idea and left Insights as a lone entry above it. They are tabs inside the Settings pane
+/// instead — the very same `SettingsTabs` the ⌘, window shows, so there is one settings UI, not two.
 ///
 /// The ⌘, scene is kept as well: it costs nothing (the same views), and people reach for it.
 struct MainWindow: View {
@@ -15,28 +20,20 @@ struct MainWindow: View {
     @State private var section: Section? = .insights
 
     enum Section: String, CaseIterable, Identifiable, Hashable {
-        case insights, general, model, server, dictionary, permissions
+        case insights, settings
         var id: String { rawValue }
 
         var label: String {
             switch self {
             case .insights: Strings.insightsTitle
-            case .general: Strings.settingsTabGeneral
-            case .model: Strings.settingsTabModel
-            case .server: Strings.settingsTabServer
-            case .dictionary: Strings.settingsTabDictionary
-            case .permissions: Strings.settingsTabPermissions
+            case .settings: Strings.settingsNav
             }
         }
 
         var icon: String {
             switch self {
             case .insights: "chart.bar.fill"
-            case .general: "gear"
-            case .model: "waveform"
-            case .server: "network"
-            case .dictionary: "textformat.abc"
-            case .permissions: "lock.shield"
+            case .settings: "gear"
             }
         }
     }
@@ -44,15 +41,8 @@ struct MainWindow: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $section) {
-                // Insights sits apart from the settings below it: it is the thing you open the
-                // window to look at, not a thing you configure.
-                Label(Section.insights.label, systemImage: Section.insights.icon)
-                    .tag(Section.insights)
-
-                SwiftUI.Section(Strings.settings) {
-                    ForEach(Section.allCases.filter { $0 != .insights }) { s in
-                        Label(s.label, systemImage: s.icon).tag(s)
-                    }
+                ForEach(Section.allCases) { s in
+                    Label(s.label, systemImage: s.icon).tag(s)
                 }
             }
             .navigationSplitViewColumnWidth(min: 168, ideal: 184, max: 220)
@@ -66,11 +56,11 @@ struct MainWindow: View {
     @ViewBuilder private var detail: some View {
         switch section ?? .insights {
         case .insights: InsightsView(model: coordinator.insights)
-        case .general: GeneralTab(coordinator: coordinator, sync: sync).padding(20)
-        case .model: ModelTab(coordinator: coordinator).padding(20)
-        case .server: ServerTab(sync: sync).padding(20)
-        case .dictionary: DictionaryTab(coordinator: coordinator, sync: sync).padding(20)
-        case .permissions: PermissionsTab().padding(20)
+        // No `.padding(20)` here, unlike the panes this replaced. `TabView` already insets its
+        // content, so padding on top of it both double-pads and — the part that bites — narrows
+        // what captions have to wrap in. `SettingsNoteTests` measures that budget; see the note
+        // on `SettingsNote` for what happens when a caption outgrows it.
+        case .settings: SettingsTabs(coordinator: coordinator, sync: sync)
         }
     }
 }

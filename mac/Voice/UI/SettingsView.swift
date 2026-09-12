@@ -1,6 +1,59 @@
 import ServiceManagement
 import SwiftUI
 
+/// The five settings tabs, carrying no size of their own.
+///
+/// Two places show them, and they want opposite things. The ⌘, scene wants a fixed 520×380 window.
+/// `MainWindow`'s detail pane wants them to fill whatever the window is, which is at least 720 wide
+/// — a fixed frame there would strand the tabs at 520pt in the middle of an empty pane. Keeping the
+/// frame out of here is what lets one view serve both; the caller supplies the size it needs.
+struct SettingsTabs: View {
+    @ObservedObject var coordinator: Coordinator
+    @ObservedObject var sync: SyncService
+
+    /// One column width for every pane, matching the ⌘, window so the two presentations agree.
+    /// In that window it changes nothing — there is less width than this to give. In `MainWindow`'s
+    /// much wider detail pane it is what stops a caption running the full width of the screen.
+    static let contentWidth: CGFloat = 520
+
+    var body: some View {
+        TabView {
+            GeneralTab(coordinator: coordinator, sync: sync).settingsPane()
+                .tabItem { Label(Strings.settingsTabGeneral, systemImage: "gear") }
+            ModelTab(coordinator: coordinator).settingsPane()
+                .tabItem { Label(Strings.settingsTabModel, systemImage: "waveform") }
+            ServerTab(sync: sync).settingsPane()
+                .tabItem { Label(Strings.settingsTabServer, systemImage: "network") }
+            DictionaryTab(coordinator: coordinator, sync: sync).settingsPane()
+                .tabItem { Label(Strings.settingsTabDictionary, systemImage: "textformat.abc") }
+            PermissionsTab().settingsPane()
+                .tabItem { Label(Strings.settingsTabPermissions, systemImage: "lock.shield") }
+        }
+    }
+}
+
+private extension View {
+    /// Puts every settings pane in the same box.
+    ///
+    /// The panes are `Form`s, which filled the ⌘, window almost exactly and do something else
+    /// entirely in a detail pane several hundred points taller: offered more height than they
+    /// need, they sit in the middle of it. Each tab then parks at a height set by how much
+    /// content it happens to have, so switching from General to Model slides everything up or
+    /// down and the window looks like it is rebuilding itself.
+    ///
+    /// Pinning each pane to the top of a fixed column is what makes switching tabs change the
+    /// content and nothing else.
+    ///
+    /// The two frames do different jobs. The inner one sets the column and keeps the controls
+    /// inside it left-aligned, so labels and checkboxes line up with each other. The outer one
+    /// centres that column in the pane and holds it at the top — `.top` rather than `.topLeading`,
+    /// which is the whole difference between a centred column and one stuck against the edge.
+    func settingsPane() -> some View {
+        frame(maxWidth: SettingsTabs.contentWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
 /// Task 9 — the Settings window. D4: constructed as `SettingsView(coordinator: Coordinator.shared,
 /// sync: Coordinator.shared.sync)` from `VoiceApp`'s `Settings` scene.
 struct SettingsView: View {
@@ -8,19 +61,8 @@ struct SettingsView: View {
     @ObservedObject var sync: SyncService
 
     var body: some View {
-        TabView {
-            GeneralTab(coordinator: coordinator, sync: sync)
-                .tabItem { Label(Strings.settingsTabGeneral, systemImage: "gear") }
-            ModelTab(coordinator: coordinator)
-                .tabItem { Label(Strings.settingsTabModel, systemImage: "waveform") }
-            ServerTab(sync: sync)
-                .tabItem { Label(Strings.settingsTabServer, systemImage: "network") }
-            DictionaryTab(coordinator: coordinator, sync: sync)
-                .tabItem { Label(Strings.settingsTabDictionary, systemImage: "textformat.abc") }
-            PermissionsTab()
-                .tabItem { Label(Strings.settingsTabPermissions, systemImage: "lock.shield") }
-        }
-        .frame(width: 520, height: 380)
+        SettingsTabs(coordinator: coordinator, sync: sync)
+            .frame(width: 520, height: 380)
     }
 }
 
