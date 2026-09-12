@@ -34,6 +34,8 @@ final class StreamingTranscriber: ObservableObject {
     /// How far into the dictation Whisper's segments actually reach, in seconds. Compared against
     /// the recorded length at the end to measure what the stream never got to (see `finish`).
     private var coveredSeconds: Double = 0
+    /// Segment spans, for the diagnostic in `finish`. Times only, never text.
+    private var spans: [(start: Float, end: Float)] = []
 
     private var streamer: AudioStreamTranscriber?
     private var task: Task<Void, Never>?
@@ -108,6 +110,7 @@ final class StreamingTranscriber: ObservableObject {
         unconfirmedText = unconfirmed.map(\.text).joined().trimmingCharacters(in: .whitespaces)
         let lastEnd = unconfirmed.last?.end ?? confirmed.last?.end
         if let lastEnd { coveredSeconds = max(coveredSeconds, Double(lastEnd)) }
+        spans = (confirmed + unconfirmed).map { (start: $0.start, end: $0.end) }
         // Lengths only, never content: this fires many times per dictation and the app's logs must
         // never carry what the user said.
         log.debug("stream: \(self.confirmedSegmentCount, privacy: .public) segments, \(self.confirmedText.count, privacy: .public) chars")
@@ -147,7 +150,15 @@ final class StreamingTranscriber: ObservableObject {
             log.error("live transcription produced nothing — falling back to a one-pass transcription")
             return nil
         }
+        // Spans, not text. A dictation that comes back short but ends cleanly lost words in the
+        // middle or at the start, and the only thing that localises it is where the segments
+        // actually sit: a hole between one segment's end and the next one's start is audio Whisper
+        // produced no words for.
+        let map = self.spans.map { "\(Int($0.start * 1000))-\(Int($0.end * 1000))" }.joined(separator: " ")
+        let holes = zip(self.spans, self.spans.dropFirst())
+            .compactMap { a, b in b.start - a.end > 0.25 ? "\(Int(a.end * 1000))-\(Int(b.start * 1000))" : nil }
         log.info("live transcription used: \(self.confirmedSegmentCount, privacy: .public) segments, covering \(Int(self.coveredSeconds * 1000), privacy: .public) ms of audio")
+        log.info("segment spans: \(map, privacy: .public)\(holes.isEmpty ? "" : "  HOLES: " + holes.joined(separator: " "), privacy: .public)")
         return (text, confirmedSegmentCount)
     }
 
@@ -159,5 +170,6 @@ final class StreamingTranscriber: ObservableObject {
         unconfirmedText = ""
         confirmedSegmentCount = 0
         coveredSeconds = 0
+        spans = []
     }
 }

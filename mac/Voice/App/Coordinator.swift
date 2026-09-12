@@ -280,8 +280,10 @@ final class Coordinator: ObservableObject {
                     if let tail = Self.tail(of: samples, afterMs: covered, totalMs: d.audioMs) {
                         log.info("transcribing stream tail: \(d.audioMs - covered, privacy: .public) ms of \(d.audioMs, privacy: .public) ms")
                         if let t = try? await self?.transcriber.transcribe(tail, hint: hint, progress: nil) {
-                            let extra = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !extra.isEmpty { text += " " + extra }
+                            // Stitched, not appended. The segment end time is not a reliable
+                            // boundary between what the stream transcribed and what it did not, so
+                            // the seam is found in the text — see `Stitch`.
+                            text = Stitch.join(streamed: text, tail: t.text)
                             asrMs = t.durationMs
                         }
                     }
