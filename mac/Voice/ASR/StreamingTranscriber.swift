@@ -23,12 +23,17 @@ private let log = Logger(subsystem: "co.miraside.voice", category: "streaming")
  */
 @MainActor
 final class StreamingTranscriber: ObservableObject {
-    /// Text Whisper has settled on. This is what gets pasted.
+    /// Text Whisper has settled on and will not revise.
     @Published private(set) var confirmedText = ""
-    /// Whisper's current hypothesis for the tail. Shown dimmed; never pasted.
+    /// Whisper's current hypothesis for the tail — the last two segments, which `AudioStreamTranscriber`
+    /// never confirms. Shown dimmed while the stream runs, because it can still change; appended to
+    /// the transcript at the end, because by then it cannot (see `finish`).
     @Published private(set) var unconfirmedText = ""
-    /// How many confirmed segments the transcript was assembled from (see `SkipGate`).
+    /// How many segments the transcript was assembled from (see `SkipGate`).
     @Published private(set) var confirmedSegmentCount = 0
+    /// How far into the dictation Whisper's segments actually reach, in seconds. Compared against
+    /// the recorded length at the end to measure what the stream never got to (see `finish`).
+    private var coveredSeconds: Double = 0
 
     private var streamer: AudioStreamTranscriber?
     private var task: Task<Void, Never>?
@@ -92,9 +97,17 @@ final class StreamingTranscriber: ObservableObject {
     }
 
     private func absorb(_ state: AudioStreamTranscriber.State) {
-        confirmedSegmentCount = state.confirmedSegments.count
-        confirmedText = state.confirmedSegments.map(\.text).joined().trimmingCharacters(in: .whitespaces)
-        unconfirmedText = state.unconfirmedSegments.map(\.text).joined().trimmingCharacters(in: .whitespaces)
+        absorb(confirmed: state.confirmedSegments, unconfirmed: state.unconfirmedSegments)
+    }
+
+    /// Split out from the `State` overload above so it can be tested: `AudioStreamTranscriber.State`
+    /// is a public type whose memberwise initialiser is not, so a test cannot build one.
+    func absorb(confirmed: [TranscriptionSegment], unconfirmed: [TranscriptionSegment]) {
+        confirmedSegmentCount = confirmed.count + unconfirmed.count
+        confirmedText = confirmed.map(\.text).joined().trimmingCharacters(in: .whitespaces)
+        unconfirmedText = unconfirmed.map(\.text).joined().trimmingCharacters(in: .whitespaces)
+        let lastEnd = unconfirmed.last?.end ?? confirmed.last?.end
+        if let lastEnd { coveredSeconds = max(coveredSeconds, Double(lastEnd)) }
         // Lengths only, never content: this fires many times per dictation and the app's logs must
         // never carry what the user said.
         log.debug("stream: \(self.confirmedSegmentCount, privacy: .public) segments, \(self.confirmedText.count, privacy: .public) chars")
@@ -103,28 +116,48 @@ final class StreamingTranscriber: ObservableObject {
     /// Ends the stream and returns the text to paste, or nil when there is nothing usable and the
     /// caller should fall back to a one-pass transcription.
     ///
-    /// Only confirmed segments: unconfirmed ones are hypotheses Whisper has not settled on, and
-    /// including them is how a half-revised word reaches someone's document.
+    /// **Confirmed *and* unconfirmed**, which is the opposite of what this did at first. The
+    /// original reasoning — "unconfirmed segments are hypotheses Whisper has not settled on" — is
+    /// right while the stream is running and wrong the moment it stops, and getting that backwards
+    /// silently truncated the end of every single streamed dictation.
+    ///
+    /// The mechanism is in `AudioStreamTranscriber`: it confirms
+    /// `segments.count - requiredSegmentsForConfirmation` and `requiredSegmentsForConfirmation`
+    /// defaults to 2, so the last two segments are *permanently* unconfirmed. They are not
+    /// mid-revision, they are simply the tail, and no further audio is coming to settle them. A
+    /// dictation short enough to be two segments confirmed nothing at all and fell back to a full
+    /// one-pass transcription — which is why this looked like it worked.
+    ///
+    /// The bar was already showing `confirmedText + unconfirmedText`, so the user watched the whole
+    /// sentence appear and then got a cut-off paste.
     func finish() async -> (text: String, segments: Int)? {
         task?.cancel()
         task = nil
         if let streamer { await streamer.stopStreamTranscription() }
         streamer = nil
 
-        let text = confirmedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = ([confirmedText, unconfirmedText]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " "))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             // Loud on purpose. This is the silent-fallback path, and when the VAD scale was wrong
             // it took every dictation for hours without a single line in the log to say so.
             log.error("live transcription produced nothing — falling back to a one-pass transcription")
             return nil
         }
-        log.info("live transcription used: \(self.confirmedSegmentCount, privacy: .public) segments")
+        log.info("live transcription used: \(self.confirmedSegmentCount, privacy: .public) segments, covering \(Int(self.coveredSeconds * 1000), privacy: .public) ms of audio")
         return (text, confirmedSegmentCount)
     }
+
+    /// How far the segments reach, for the caller to compare against the recorded length.
+    var coveredMs: Int { Int(coveredSeconds * 1000) }
 
     func reset() {
         confirmedText = ""
         unconfirmedText = ""
         confirmedSegmentCount = 0
+        coveredSeconds = 0
     }
 }

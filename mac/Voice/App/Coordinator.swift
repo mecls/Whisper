@@ -264,6 +264,14 @@ final class Coordinator: ObservableObject {
                 // release→paste no longer contains an ASR pass. `asrMs` is 0 for these because no
                 // transcription happened after the key came up; the work was done while speaking.
                 if let streamed = await self?.streaming.finish() {
+                    // How much of the recording the stream's segments never reached.
+                    // `AudioStreamTranscriber` only transcribes once a full second of new audio has
+                    // arrived and does no final pass when it stops, so some tail is always left
+                    // over. Logged rather than assumed: if it turns out to cost real words, the fix
+                    // is one short pass over the remainder, and this says whether that is worth it.
+                    if let covered = self?.streaming.coveredMs, d.audioMs > covered {
+                        log.info("stream tail not transcribed: \(d.audioMs - covered, privacy: .public) ms of \(d.audioMs, privacy: .public) ms")
+                    }
                     self?.streamedSegments[id] = streamed.segments
                     self?.send(.transcribed(id, text: streamed.text,
                                             language: hint.language ?? "auto", ms: 0))

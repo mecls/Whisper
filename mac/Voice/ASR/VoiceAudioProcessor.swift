@@ -42,10 +42,20 @@ final class VoiceAudioProcessor: AudioProcessing {
     /// the user sees cannot drift apart.
     var relativeEnergy: [Float] { recorder.recentEnergy.map { min(1, $0 / Self.speechFloor) } }
 
-    /// RMS at which speech is considered unambiguously present. Chosen against `EnergyGate`'s own
-    /// `hasSpeech` threshold of 0.01, which is the level this app already treats as "not silence";
-    /// 0.05 puts normal speech comfortably above 0.3 and leaves room tone far below it.
-    private static let speechFloor: Float = 0.05
+    /// RMS that maps to full scale, chosen so the streaming VAD and the rest of the app agree on
+    /// what counts as speech.
+    ///
+    /// `AudioStreamTranscriber` calls anything below `silenceThreshold` (0.3) silence, so the RMS it
+    /// starts transcribing at is `speechFloor * 0.3`. Setting the floor to 1/30 puts that at 0.01 —
+    /// exactly `EnergyGate.hasSpeech`'s threshold, the level this app already treats as not-silence.
+    ///
+    /// The first value here was 0.05, which put the VAD's cutoff at 0.015: quiet audio that Voice
+    /// itself counted as speech, the stream skipped. That is mostly harmless mid-dictation, because
+    /// a skipped buffer is deferred rather than dropped — `lastBufferSize` does not advance, so the
+    /// audio is picked up by the next pass that does see voice. It is not harmless at the end. A
+    /// sentence trailed off quietly is never transcribed at all, because no further pass is coming,
+    /// and it disappears from the transcript.
+    private static let speechFloor: Float = 1.0 / 30.0
 
     var relativeEnergyWindow: Int = 20
 
