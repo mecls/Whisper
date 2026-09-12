@@ -20,6 +20,10 @@ import SwiftUI
 final class HUDPanel: NSPanel {
     private let model = HUDModel()
     private var observers: [NSObjectProtocol] = []
+    // What the current frame was measured for. Levels arrive ~47x/second and never change the
+    // pill's width — the waveform is a fixed count of fixed-width bars — so re-measuring on every
+    // one of them would force a layout pass 47 times a second for no possible change.
+    private var laidOutFor: (state: HUDState, liveChars: Int, latched: Bool)?
 
     /// Called when the mic button is clicked. Wired to the same session entry points the keyboard
     /// uses, so a session started by mouse can be ended by key and vice versa.
@@ -29,7 +33,7 @@ final class HUDPanel: NSPanel {
     }
 
     init() {
-        super.init(contentRect: NSRect(origin: .zero, size: HUDView.idleSize),
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 120, height: 32),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         level = .floating
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
@@ -45,7 +49,7 @@ final class HUDPanel: NSPanel {
         // screen containing the window with keyboard focus, which is exactly the rule — not the
         // screen with the menu bar, and not the one under the mouse pointer, which would make an
         // always-visible bar jump between displays as the cursor moved.
-        let reposition: (Notification) -> Void = { [weak self] _ in self?.position() }
+        let reposition: (Notification) -> Void = { [weak self] _ in self?.layoutToFit() }
         observers = [
             NotificationCenter.default.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification,
@@ -70,31 +74,54 @@ final class HUDPanel: NSPanel {
         model.levels = levels
         model.latched = latched
         model.liveText = liveText
-        model.mode = Preferences.mode
-        model.language = Preferences.language
-        applyVisibility()
+
+        guard Preferences.showBar else { return orderOut(nil) }
+        let key = (state: state, liveChars: liveText?.count ?? -1, latched: latched)
+        let changed = laidOutFor.map {
+            $0.state != key.state || $0.liveChars != key.liveChars || $0.latched != key.latched
+        } ?? true
+        if changed {
+            laidOutFor = key
+            layoutToFit()
+        }
+        if !isVisible { orderFrontRegardless() }
     }
 
     /// Called when `Preferences.showBar` changes, so the toggle takes effect without a dictation.
     func applyVisibility() {
         guard Preferences.showBar else { return orderOut(nil) }
-        resize(for: model.state)
-        position()
+        laidOutFor = nil          // force a re-measure: the bar may have been hidden since
+        layoutToFit()
         if !isVisible { orderFrontRegardless() }
     }
 
-    private func resize(for state: HUDState) {
-        let target = HUDView.size(for: state)
-        guard frame.size != target else { return }
-        setContentSize(target)
+    /// Sizes and centres the pill in one step, from one measurement.
+    ///
+    /// These were two calls and that was the bug: `setContentSize` keeps the window's bottom-left
+    /// origin, so the bar grew rightward, and the centring that followed read `frame.width` — which
+    /// SwiftUI had not yet updated, because it lays out asynchronously. The window was therefore
+    /// centred using a width it was about to stop having, and drifted further the bigger the change,
+    /// which is why a long dictation ending looked worst.
+    ///
+    /// `layoutSubtreeIfNeeded()` forces the pending layout so `fittingSize` is current, and
+    /// `setFrame` applies origin and size together so no intermediate state is ever displayed.
+    private func layoutToFit() {
+        guard let host = contentView else { return }
+        host.layoutSubtreeIfNeeded()
+        let size = host.fittingSize
+        guard size.width > 1, size.height > 1 else { return }
+        guard let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
+
+        // `visibleFrame` already excludes the Dock, so this is measured from above it (or from the
+        // screen edge when the Dock is hidden). Rounded because a half-pixel origin makes the
+        // material background shimmer as the bar resizes.
+        let origin = NSPoint(x: (visible.midX - size.width / 2).rounded(),
+                             y: (visible.minY + 10).rounded())
+        let target = NSRect(origin: origin, size: size)
+        guard frame != target else { return }
+        setFrame(target, display: true)
     }
 
-    private func position() {
-        guard let f = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
-        // `visibleFrame` already excludes the Dock; the extra 40 pt keeps the bar clear of it
-        // rather than flush against it.
-        setFrameOrigin(NSPoint(x: f.midX - frame.width / 2, y: f.minY + 40))
-    }
 }
 
 final class HUDModel: ObservableObject {
@@ -103,7 +130,5 @@ final class HUDModel: ObservableObject {
     @Published var latched = false
     /// Streaming transcript, already filtered by `showTextInHUD` before it reaches here.
     @Published var liveText: String?
-    @Published var mode: String = Preferences.mode
-    @Published var language: String = Preferences.language
     var onMicTap: (() -> Void)?
 }

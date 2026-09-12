@@ -1,52 +1,62 @@
 import SwiftUI
 
-/// The bar: always on screen, showing what Voice is doing and offering one control.
+/// The bar: always on screen, as small as its contents allow.
 ///
-/// It has two sizes. Idle is small and quiet — a mic button and the current mode and language,
-/// which is what sits at the bottom of the screen 99% of the time. Active widens to carry the
-/// stage, the waveform and the hands-free indicator.
+/// It sizes itself — there are no fixed dimensions here and none in `HUDPanel`, which resizes the
+/// window to this view's fitting size. That keeps it minimal at every state and, incidentally,
+/// serves the click-through rule: the panel's frame is exactly the visible pill, so the region that
+/// can swallow a click is never larger than what the user can see.
 ///
-/// Only the mic button is hit-testable. Everything else is explicitly `.allowsHitTesting(false)`,
-/// because the panel gave up `ignoresMouseEvents` to make that one button clickable and must not
-/// swallow clicks meant for the window underneath.
+/// At rest it is just the mic in a pill: enough to say the app is running and to give the click a
+/// target, and nothing more. Mode and language used to sit beside it and were removed — they are
+/// already in the menu bar, and a permanent label restating settings that rarely change is exactly
+/// the kind of thing that makes a persistent bar feel like clutter.
+///
+/// While listening it shows the waveform and nothing else. A moving waveform already says both
+/// things a status line could — that it is recording, and that it is genuinely hearing you — so
+/// "Listening" next to it is a word doing no work. The other stages keep their text, because
+/// "Cleaning" or "Nothing heard" are not otherwise visible.
 struct HUDView: View {
     @ObservedObject var model: HUDModel
 
-    static let idleSize = CGSize(width: 248, height: 40)
-    static let activeSize = CGSize(width: 380, height: 60)
-
-    static func size(for state: HUDState) -> CGSize {
-        if case .hidden = state { return idleSize }
-        return activeSize
+    private enum Metric {
+        static let mic: CGFloat = 22
+        static let icon: CGFloat = 11
+        static let text: CGFloat = 10.5
+        static let bars = 20
+        static let barWidth: CGFloat = 2.5
+        static let barGap: CGFloat = 1.5
+        static let barMax: CGFloat = 16
     }
 
     private var isIdle: Bool { if case .hidden = model.state { return true }; return false }
+    private var isListening: Bool { if case .listening = model.state { return true }; return false }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 7) {
             micButton
-            if isIdle {
-                idleContent
-            } else {
-                activeContent
+            if isListening {
+                waveform
+            } else if !isIdle {
+                statusContent
             }
+            // Idle renders nothing beside the mic — the pill itself is the signal.
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(width: Self.size(for: model.state).width,
-               height: Self.size(for: model.state).height)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(0.08)))
+        .fixedSize()
     }
 
-    /// The one interactive element. Starts a hands-free session, or ends the running one — the
-    /// same session concept the keyboard drives, so either can end what the other started.
+    /// The one interactive element. Red while latched — which is also the only latched indicator
+    /// the bar needs: with the waveform beside it, a badge reading "hands-free" is redundant.
     private var micButton: some View {
         Button(action: { model.onMicTap?() }) {
             Image(systemName: model.latched ? "stop.fill" : "mic.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 26, height: 26)
-                .background(model.latched ? Color.red.opacity(0.9) : Color.secondary.opacity(0.2),
+                .font(.system(size: Metric.icon, weight: .semibold))
+                .frame(width: Metric.mic, height: Metric.mic)
+                .background(model.latched ? Color.red.opacity(0.9) : Color.secondary.opacity(0.18),
                             in: Circle())
                 .foregroundStyle(model.latched ? .white : .primary)
         }
@@ -54,68 +64,31 @@ struct HUDView: View {
         .help(model.latched ? Strings.latched : Strings.appName)
     }
 
-    // MARK: - Idle
-
-    private var idleContent: some View {
-        HStack(spacing: 8) {
-            Text(model.mode == "literal" ? Strings.modeLiteral : Strings.modeClean)
-                .font(.system(size: 11, weight: .medium))
-            Text("·").foregroundStyle(.tertiary)
-            Text(languageLabel)
-                .font(.system(size: 11, weight: .medium))
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(.secondary)
-        .allowsHitTesting(false)
-    }
-
-    private var languageLabel: String {
-        switch model.language {
-        case "pt": return Strings.langPt
-        case "en": return Strings.langEn
-        default: return Strings.langAuto
-        }
-    }
-
-    // MARK: - Active
-
-    private var activeContent: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(title).font(.system(size: 12, weight: .medium))
-                    if model.latched { latchedBadge }
-                }
-                // Rule 15 carries over: a preview only with the preference on. On a bar that never
-                // hides, the alternative is leaving the last thing you dictated on screen forever.
-                if let live = model.liveText {
-                    // Live transcript while speaking. Display only — it never reaches the target
-                    // app, because Whisper revises unconfirmed text and a paste cannot be undone.
-                    Text(live).font(.system(size: 10)).lineLimit(1)
-                        .truncationMode(.head).foregroundStyle(.secondary)
-                } else if case .done(let preview, _) = model.state, let preview, Preferences.showTextInHUD {
-                    Text(preview).font(.system(size: 10)).lineLimit(1).foregroundStyle(.secondary)
-                }
+    /// Transcribing, cleaning, done, errors — states with nothing visual to speak for them.
+    private var statusContent: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            // Monospaced digits: without them "Transcribing 45 %" and "46 %" are different widths,
+            // so the bar re-measured and re-centred on every progress tick — visible as a jitter
+            // for the whole of a long transcription.
+            Text(title).font(.system(size: Metric.text, weight: .medium)).monospacedDigit()
+            if let live = model.liveText {
+                // Live transcript. Display only: Whisper revises unconfirmed text, and a paste
+                // cannot be taken back.
+                Text(live).font(.system(size: Metric.text - 1)).lineLimit(1)
+                    .truncationMode(.head).foregroundStyle(.secondary)
+                    .frame(maxWidth: 220, alignment: .leading)
+            } else if case .done(let preview, _) = model.state, let preview, Preferences.showTextInHUD {
+                Text(preview).font(.system(size: Metric.text - 1)).lineLimit(1)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 220, alignment: .leading)
             }
-            Spacer(minLength: 0)
-            if case .listening = model.state { waveform }
         }
         .allowsHitTesting(false)
-    }
-
-    private var latchedBadge: some View {
-        Text(Strings.latched)
-            .font(.system(size: 9, weight: .semibold))
-            .textCase(.uppercase)
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(Color.red.opacity(0.18), in: Capsule())
-            .foregroundStyle(.red)
     }
 
     private var title: String {
         switch model.state {
-        case .hidden: ""
-        case .listening: Strings.listening
+        case .hidden, .listening: ""
         case .transcribing(let p): p.map { "\(Strings.transcribing) \(Int($0 * 100)) %" } ?? Strings.transcribing
         case .cleaning: Strings.cleaning
         case .done(_, let via): via.map { "\(Strings.done) · \($0)" } ?? Strings.done
@@ -124,14 +97,21 @@ struct HUDView: View {
         }
     }
 
-    /// The one element that proves the microphone is genuinely hearing you. A flat waveform is what
-    /// an afternoon of debugging an AirPods sample-rate mismatch would have shown in one second.
+    /// Always exactly `Metric.bars` bars, zero-padded at the front. A waveform that grew as the
+    /// first samples arrived would make the whole bar resize during the first second of every
+    /// dictation.
     private var waveform: some View {
-        HStack(spacing: 2) {
-            ForEach(Array(model.levels.suffix(20).enumerated()), id: \.offset) { _, l in
+        let recent = model.levels.suffix(Metric.bars)
+        let padded = Array(repeating: Float(0), count: max(0, Metric.bars - recent.count)) + Array(recent)
+        return HStack(spacing: Metric.barGap) {
+            ForEach(Array(padded.enumerated()), id: \.offset) { _, l in
                 RoundedRectangle(cornerRadius: 1)
-                    .frame(width: 3, height: max(3, CGFloat(min(l * 40, 1)) * 24))
+                    .frame(width: Metric.barWidth,
+                           height: max(2, CGFloat(min(l * 40, 1)) * Metric.barMax))
             }
         }
+        .frame(height: Metric.barMax)
+        .foregroundStyle(model.latched ? Color.red.opacity(0.85) : Color.secondary)
+        .allowsHitTesting(false)
     }
 }

@@ -194,6 +194,22 @@ final class Coordinator: ObservableObject {
 
     func send(_ e: MachineEvent) {
         for effect in machine.handle(e) { perform(effect) }
+        purgeFinishedDictations()
+    }
+
+    /// Drops per-dictation bookkeeping for ids the reducer has already finished with.
+    ///
+    /// `releaseAt` and `streamedSegments` are cleared explicitly in `.reportInjected`, which is the
+    /// path a successful dictation takes. A cancelled one, or one whose transcription failed, never
+    /// gets there and used to leave its entry behind forever. The queue is the authority on what is
+    /// still in flight, so sweeping against it catches every exit path including ones added later —
+    /// which matters more than the few bytes, because the next person to add an early-exit will not
+    /// think to clean up two dictionaries they did not know existed.
+    private func purgeFinishedDictations() {
+        guard !releaseAt.isEmpty || !streamedSegments.isEmpty else { return }
+        let live = Set(machine.queue.map(\.clientId))
+        releaseAt = releaseAt.filter { live.contains($0.key) }
+        streamedSegments = streamedSegments.filter { live.contains($0.key) }
     }
 
     private func perform(_ effect: Effect) {
