@@ -24,6 +24,38 @@ struct SettingsView: View {
     }
 }
 
+/// A wrapping caption under a settings control.
+///
+/// The width is bounded on purpose, and every caption in this window must go through here.
+/// `Text(...).fixedSize(horizontal: false, vertical: true)` — the obvious way to make a caption
+/// wrap — does the exact opposite inside a `NavigationSplitView` detail pane. Asked for its ideal
+/// size with no width proposed, the text reports a single unbroken line: 1109 points for the live
+/// transcription note. The detail pane then asks the window for 1149 points next to a 184-point
+/// sidebar, `NavigationSplitView` cannot satisfy that against a 900-point window, and it resolves
+/// by rendering *both* columns empty — a blank window that survives switching tabs and only clears
+/// on relaunch. Nothing errors, nothing hangs, and the view body evaluates normally, so there is
+/// no thread to sample and no exception to catch.
+///
+/// `idealWidth` is what fixes it: it caps what the pane asks the window for, while `maxWidth`
+/// still lets the caption use a wider window. `maxWidth` alone does not work — with no proposed
+/// width the text is laid out as one line and then clipped to the frame, so it stops wrapping.
+struct SettingsNote: View {
+    /// Wide enough for a readable measure, far below the detail pane's budget. `SettingsViewTests`
+    /// pins this: a caption whose ideal width climbs back toward the window width fails there
+    /// rather than in a blank window.
+    static let idealWidth: CGFloat = 420
+
+    private let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(idealWidth: Self.idealWidth, maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - General
 
 struct GeneralTab: View {
@@ -66,9 +98,7 @@ struct GeneralTab: View {
             Toggle(Strings.showBar, isOn: $showBar)
                 .onChange(of: showBar) { _, _ in coordinator.refreshBarVisibility() }
             Toggle(Strings.liveTranscription, isOn: $liveTranscription)
-            Text(Strings.liveTranscriptionNote)
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            SettingsNote(Strings.liveTranscriptionNote)
             Toggle(Strings.launchAtLogin, isOn: $launchAtLogin).onChange(of: launchAtLogin) { _, on in
                 Task {
                     let failure: String? = await Task.detached(priority: .userInitiated) {
