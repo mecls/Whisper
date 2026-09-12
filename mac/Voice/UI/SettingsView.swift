@@ -35,7 +35,13 @@ struct GeneralTab: View {
     @AppStorage(Preferences.Key.hotkey) private var hotkeyRaw = HotkeyChoice.fn.rawValue
     @AppStorage(Preferences.Key.sounds) private var sounds = true
     @AppStorage(Preferences.Key.showTextInHUD) private var showTextInHUD = true
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    // Loaded in `.task`, never in the initialiser. `SMAppService.mainApp.status` is a synchronous
+    // XPC call to the service-management daemon, and a @State default expression runs while the
+    // view is being constructed — on the main thread, during the navigation transition that is
+    // presenting it. That blocked the main thread hard enough to paint an empty window and hang the
+    // app until it was relaunched, and it is slowest of all for an app running outside
+    // /Applications, which is exactly how this one is built and run.
+    @State private var launchAtLogin = false
     @State private var launchAtLoginError: String?
 
     private var hotkeyChoice: Binding<HotkeyChoice> {
@@ -64,12 +70,21 @@ struct GeneralTab: View {
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Toggle(Strings.launchAtLogin, isOn: $launchAtLogin).onChange(of: launchAtLogin) { _, on in
-                do {
-                    if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-                    launchAtLoginError = nil
-                } catch {
-                    launchAtLogin = !on
-                    launchAtLoginError = Strings.launchAtLoginError(error.localizedDescription)
+                Task {
+                    let failure: String? = await Task.detached(priority: .userInitiated) {
+                        do {
+                            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+                            return nil
+                        } catch {
+                            return Strings.launchAtLoginError(error.localizedDescription)
+                        }
+                    }.value
+                    if let failure {
+                        launchAtLogin = !on          // the switch must not claim a state it failed to reach
+                        launchAtLoginError = failure
+                    } else {
+                        launchAtLoginError = nil
+                    }
                 }
             }
             if let launchAtLoginError {
@@ -77,6 +92,14 @@ struct GeneralTab: View {
             }
         }
         .padding()
+        .task {
+            // Off the main actor as well as out of the initialiser: the daemon can take its time,
+            // and the only cost of answering late is a toggle that settles a moment after the pane
+            // appears.
+            launchAtLogin = await Task.detached(priority: .userInitiated) {
+                SMAppService.mainApp.status == .enabled
+            }.value
+        }
     }
 }
 
