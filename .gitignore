@@ -14,3 +14,6 @@ mac/build/
 # Local-only ops runbooks — contain VPS/SSH details, never commit to the public repo
 GO_LIVE.md
 deploy/VPS.md
+
+# Derived icon intermediates — regenerate with mac/scripts/make-icon.py
+mac/branding/Voice.iconset/
