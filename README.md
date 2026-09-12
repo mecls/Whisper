@@ -1,6 +1,9 @@
 # Spit
+<img width="2288" height="1160" alt="SL" src="https://github.com/user-attachments/assets/1d2c7621-5288-47dd-bd32-8ee7b3aec986" />
 
-A dictation app for macOS: hold a hotkey, speak, release, and clean text lands at the cursor. Audio runs locally via WhisperKit (CoreML), text refinement and history live on the VPS, and no data leaves the Mac unencrypted.
+
+
+A Sintra Labs Open Source dictation app for macOS: hold a hotkey, speak, release, and clean text lands at the cursor. Audio runs locally via WhisperKit (CoreML), text refinement and history live on the VPS, and no data leaves the Mac unencrypted.
 
 ## Architecture
 
