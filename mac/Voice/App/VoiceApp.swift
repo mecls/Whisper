@@ -12,6 +12,7 @@ struct VoiceApp: App {
     @AppStorage(Preferences.Key.mode) private var mode = Preferences.mode
     @AppStorage(Preferences.Key.language) private var language = Preferences.language
     @AppStorage(Preferences.Key.showBar) private var showBar = Preferences.showBar
+    @AppStorage(Preferences.Key.liveTranscription) private var liveTranscription = Preferences.liveTranscription
 
     private var menuIcon: String {
         if sync.unauthorized { return "mic.badge.xmark" }
@@ -44,6 +45,7 @@ struct VoiceApp: App {
             Button(coordinator.paused ? Strings.resume : Strings.pause) { coordinator.paused.toggle() }
             Toggle(Strings.showBar, isOn: $showBar)
                 .onChange(of: showBar) { _, _ in coordinator.refreshBarVisibility() }
+            Toggle(Strings.liveTranscription, isOn: $liveTranscription)
             Divider()
             Button(Strings.insightsMenuItem) { openWindow(id: "insights"); NSApp.activate(ignoringOtherApps: true) }
             Button(Strings.setUpPermissions) { openWindow(id: "onboarding"); NSApp.activate(ignoringOtherApps: true) }

@@ -21,6 +21,7 @@ enum Strings {
     static let latched = "hands-free"
     static let latchCapReached = "Reached the 90 s limit — transcribing"
     static let showBar = "Show bar"
+    static let liveTranscription = "Live transcription (experimental)"
     static let modelLoading = "Model loading"
     static let modelNotDownloaded = "Model not downloaded"
     static let copyLast = "Copy last dictation"

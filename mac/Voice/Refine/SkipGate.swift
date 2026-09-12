@@ -54,12 +54,20 @@ enum SkipGate {
         case repeatedWord = "repeated-word"
         case spokenCommand = "spoken-command"
         case unterminated
+        /// The transcript was assembled from more than one streamed segment, so it carries at
+        /// least one chunk boundary. Skipping is the only path where nothing inspects the text
+        /// before it reaches the user's document, so it is the one place a boundary artifact could
+        /// land uncorrected — and cleanup repairs exactly that class of damage.
+        case streamedMultiSegment = "streamed-multi-segment"
     }
 
     /// - Parameter language: the ASR's detected language. When nil or unrecognised, both filler
     ///   lists apply (rule 12) — an unknown language must not become a reason to skip.
-    static func reasonToClean(raw: String, mode: String, language: String?) -> Reason? {
+    /// - Parameter segments: how many confirmed streaming segments produced this text. 1 for a
+    ///   one-pass transcription, which has no boundaries at all.
+    static func reasonToClean(raw: String, mode: String, language: String?, segments: Int = 1) -> Reason? {
         guard mode == "clean" else { return .notCleanMode }   // rule 13: literal never reaches here
+        if segments > 1 { return .streamedMultiSegment }
 
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let last = text.last, terminalPunctuation.contains(last) else { return .unterminated }
@@ -94,7 +102,7 @@ enum SkipGate {
         return nil
     }
 
-    static func shouldSkipCleanup(raw: String, mode: String, language: String?) -> Bool {
-        reasonToClean(raw: raw, mode: mode, language: language) == nil
+    static func shouldSkipCleanup(raw: String, mode: String, language: String?, segments: Int = 1) -> Bool {
+        reasonToClean(raw: raw, mode: mode, language: language, segments: segments) == nil
     }
 }

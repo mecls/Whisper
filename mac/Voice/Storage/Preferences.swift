@@ -7,12 +7,12 @@ enum Preferences {
     enum Key {
         static let hotkey = "hotkey", sounds = "sounds", showTextInHUD = "showTextInHUD", modelId = "modelId"
         static let serverURL = "serverURL", mode = "mode", language = "language", onboarded = "onboarded"
-        static let showBar = "showBar"
+        static let showBar = "showBar", liveTranscription = "liveTranscription"
     }
     static let defaults: [String: Any] = [
         Key.hotkey: HotkeyChoice.fn.rawValue, Key.sounds: true, Key.showTextInHUD: true,
         Key.modelId: "large-v3-v20240930_turbo_632MB", Key.serverURL: "https://voice.miraside.co",
-        Key.mode: "clean", Key.language: "auto", Key.onboarded: false, Key.showBar: true,
+        Key.mode: "clean", Key.language: "auto", Key.onboarded: false, Key.showBar: true, Key.liveTranscription: false,
     ]
     static func registerDefaults() { UserDefaults.standard.register(defaults: defaults) }
 
@@ -29,5 +29,12 @@ enum Preferences {
     static var language: String { get { d.string(forKey: Key.language) ?? "auto" } set { d.set(newValue, forKey: Key.language) } }
     static var onboarded: Bool { get { d.bool(forKey: Key.onboarded) } set { d.set(newValue, forKey: Key.onboarded) } }
     /// Permanent screen furniture that cannot be turned off is a bug; default on, one click away.
+    /// Off by default. The accuracy gate that would justify enabling it — streamed vs one-pass
+    /// word error rate — cannot be measured: the 20 "fixtures" the spec names are text, not audio,
+    /// and the repo holds only two real recordings, one of them synthetic.
+    static var liveTranscription: Bool {
+        get { d.bool(forKey: Key.liveTranscription) }
+        set { d.set(newValue, forKey: Key.liveTranscription) }
+    }
     static var showBar: Bool { get { d.bool(forKey: Key.showBar) } set { d.set(newValue, forKey: Key.showBar) } }
 }

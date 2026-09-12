@@ -35,6 +35,12 @@ struct Dictation: Equatable {
     /// itself is the one already writing the row.
     var llmModel: String?
 
+    /// How many confirmed streaming segments produced `raw`. 1 for a one-pass transcription, which
+    /// has no chunk boundaries. Above 1 the skip gate refuses to skip: skipping is the only path
+    /// where nothing inspects the text before it reaches the user's document, so it is the one
+    /// place a boundary artifact could land uncorrected.
+    var streamedSegments: Int = 1
+
     /// What gets pasted: the cleanup when there is one, the raw transcript otherwise.
     var textToInsert: String? { cleaned ?? raw }
 

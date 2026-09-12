@@ -65,10 +65,11 @@ final class HUDPanel: NSPanel {
 
     /// Renders the current state. Visibility is governed by `Preferences.showBar` alone — the bar
     /// no longer appears and disappears with the dictation.
-    func update(_ state: HUDState, levels: [Float], latched: Bool) {
+    func update(_ state: HUDState, levels: [Float], latched: Bool, liveText: String? = nil) {
         model.state = state
         model.levels = levels
         model.latched = latched
+        model.liveText = liveText
         model.mode = Preferences.mode
         model.language = Preferences.language
         applyVisibility()
@@ -100,6 +101,8 @@ final class HUDModel: ObservableObject {
     @Published var state: HUDState = .hidden
     @Published var levels: [Float] = []
     @Published var latched = false
+    /// Streaming transcript, already filtered by `showTextInHUD` before it reaches here.
+    @Published var liveText: String?
     @Published var mode: String = Preferences.mode
     @Published var language: String = Preferences.language
     var onMicTap: (() -> Void)?

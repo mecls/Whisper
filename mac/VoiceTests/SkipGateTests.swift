@@ -121,4 +121,46 @@ final class SkipGateTests: XCTestCase {
             XCTAssertNotNil(reason(f, language: nil), "must not skip a known-dirty fixture: \(f)")
         }
     }
+
+    // MARK: - Streamed transcripts (prd-live-transcription.md rule 4a)
+
+    func testASingleSegmentStreamedTranscriptSkipsExactlyAsBefore() {
+        // One confirmed segment means no chunk boundary, so there is no boundary artifact to catch
+        // and the fast path stays available — which matters most for exactly these short
+        // utterances, where the ~700 ms round trip is the largest share of total latency.
+        XCTAssertNil(SkipGate.reasonToClean(raw: "Bom dia, a reunião está confirmada.",
+                                            mode: "clean", language: "pt", segments: 1))
+    }
+
+    func testAMultiSegmentStreamedTranscriptNeverSkips() {
+        // The same text, assembled from two segments, must go to cleanup however clean it looks.
+        // Skipping is the one path where nothing inspects the text before it lands in someone's
+        // document, and chunk boundaries are exactly what cleanup repairs.
+        XCTAssertEqual(SkipGate.reasonToClean(raw: "Bom dia, a reunião está confirmada.",
+                                              mode: "clean", language: "pt", segments: 2),
+                       .streamedMultiSegment)
+    }
+
+    func testTheSegmentRuleOutranksEveryOtherClause() {
+        // Even text that would pass every clause of rule 11 is still cleaned when it carries a
+        // boundary — the gate's other clauses cannot see a seam mid-sentence.
+        for text in ["Sim.", "The invoice is ready for review.", "O que achas disto?"] {
+            XCTAssertEqual(SkipGate.reasonToClean(raw: text, mode: "clean", language: nil, segments: 3),
+                           .streamedMultiSegment, "\(text) carries a boundary and must be cleaned")
+        }
+    }
+
+    func testLiteralModeStillWinsOverTheSegmentRule() {
+        // Literal is the user's explicit instruction not to touch the text. A chunk boundary does
+        // not override that — it just means the seam stays where it is.
+        XCTAssertEqual(SkipGate.reasonToClean(raw: "Sim.", mode: "literal", language: "pt", segments: 4),
+                       .notCleanMode)
+    }
+
+    func testOnePassTranscriptionIsUnaffectedByDefault() {
+        // Every existing caller omits `segments`, so the default of 1 must preserve today's
+        // behaviour exactly — otherwise this rule would silently disable the skip gate.
+        XCTAssertNil(SkipGate.reasonToClean(raw: "Sim.", mode: "clean", language: "pt"))
+        XCTAssertTrue(SkipGate.shouldSkipCleanup(raw: "Isto é bom.", mode: "clean", language: "pt"))
+    }
 }

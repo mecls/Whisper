@@ -88,7 +88,12 @@ struct HUDView: View {
                 }
                 // Rule 15 carries over: a preview only with the preference on. On a bar that never
                 // hides, the alternative is leaving the last thing you dictated on screen forever.
-                if case .done(let preview, _) = model.state, let preview, Preferences.showTextInHUD {
+                if let live = model.liveText {
+                    // Live transcript while speaking. Display only — it never reaches the target
+                    // app, because Whisper revises unconfirmed text and a paste cannot be undone.
+                    Text(live).font(.system(size: 10)).lineLimit(1)
+                        .truncationMode(.head).foregroundStyle(.secondary)
+                } else if case .done(let preview, _) = model.state, let preview, Preferences.showTextInHUD {
                     Text(preview).font(.system(size: 10)).lineLimit(1).foregroundStyle(.secondary)
                 }
             }

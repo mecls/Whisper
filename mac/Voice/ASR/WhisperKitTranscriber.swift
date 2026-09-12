@@ -12,6 +12,10 @@ final class WhisperKitTranscriber: Transcriber {
 
     var isReady: Bool { pipe != nil }
 
+    /// The loaded pipeline, for `StreamingTranscriber` to build an `AudioStreamTranscriber` from.
+    /// One model instance, not two: the compressed model is ~630 MB and takes minutes to compile.
+    var whisperKit: WhisperKit? { pipe }
+
     func prepare(progress: @escaping (Double) -> Void) async throws {
         let folder = try await manager.ensure(modelId) { progress($0 * 0.8) }
         let config = WhisperKitConfig(

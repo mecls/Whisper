@@ -36,6 +36,13 @@ final class Coordinator: ObservableObject {
     /// The double-tap gesture rules. Pure and clock-free; this owns the clock on its behalf, the
     /// same way it owns the release→paste clock above.
     private var tapLatch = TapLatch()
+    /// Live transcription. Off unless `Preferences.liveTranscription` is on — the accuracy gate that
+    /// would justify defaulting it on could not be measured (see the build's decisions log).
+    let streaming = StreamingTranscriber()
+    private lazy var streamProcessor = VoiceAudioProcessor(recorder: recorder)
+    /// How many confirmed segments produced each dictation's text. 1 means no chunk boundary, which
+    /// is what lets the skip gate leave it uncleaned.
+    private var streamedSegments: [UUID: Int] = [:]
     private var latchWindowWork: DispatchWorkItem?
     private let recorder = AudioRecorder()
     private let injector = TextInjector()
@@ -211,6 +218,7 @@ final class Coordinator: ObservableObject {
                 showHUD(.message(Strings.noMicrophone))
                 return
             }
+            startStreamingIfEnabled()
             prewarmConnection()   // rule 19: strictly after the microphone is open
             if Preferences.sounds { NSSound(named: "Tink")?.play() }
         case .stopRecording:
@@ -224,6 +232,7 @@ final class Coordinator: ObservableObject {
             send(.audioStopped(samples: samples, ms: ms, speech: EnergyGate.hasSpeech(samples)))
         case .discardRecording:
             hotkey.setListening(false)
+            Task { _ = await streaming.finish() }   // never leave a stream running past its dictation
             recorder.discard()
         case .transcribe(let id):
             // `.transcribe` is emitted synchronously from `.audioStopped`, which the `.stopRecording`
@@ -235,6 +244,15 @@ final class Coordinator: ObservableObject {
             let samples = d.samples
             let hint = TranscribeHint(language: Preferences.language == "auto" ? nil : Preferences.language, vocabulary: DictionaryCache.shared.terms)
             Task { [weak self] in
+                // The streamed transcript is already finished — that is the entire point, and why
+                // release→paste no longer contains an ASR pass. `asrMs` is 0 for these because no
+                // transcription happened after the key came up; the work was done while speaking.
+                if let streamed = await self?.streaming.finish() {
+                    self?.streamedSegments[id] = streamed.segments
+                    self?.send(.transcribed(id, text: streamed.text,
+                                            language: hint.language ?? "auto", ms: 0))
+                    return
+                }
                 do {
                     let t = try await self?.transcriber.transcribe(samples, hint: hint) { p in
                         Task { @MainActor in self?.showHUD(.transcribing(progress: p)) }
@@ -247,7 +265,12 @@ final class Coordinator: ObservableObject {
                 }
             }
         case .refine(let id):
-            guard let d = machine.queue.first(where: { $0.clientId == id }) else { return }
+            guard var d = machine.queue.first(where: { $0.clientId == id }) else { return }
+            // Carried on the Coordinator's own copy rather than through the reducer: the segment
+            // count is an artefact of how the text was produced, not part of the dictation's state
+            // machine, and threading it through MachineEvent would widen a deliberately small
+            // event set for one consumer.
+            d.streamedSegments = streamedSegments[id] ?? 1
             Task { [weak self] in
                 let r = await self?.refiner.refine(d, mode: Preferences.mode) ?? .rawFallback(.offline)
                 self?.send(.refined(id, r))
@@ -264,11 +287,30 @@ final class Coordinator: ObservableObject {
                 if result == .clipboardOnly { self?.showHUD(.message(Strings.secureField)) }
             }
         case .reportInjected(let id, let how):
+            streamedSegments.removeValue(forKey: id)
             let totalMs = releaseAt.removeValue(forKey: id).map { Int(Date().timeIntervalSince($0) * 1000) }
             Task { await refiner.reportInjected(clientId: id, injected: how, totalMs: totalMs) }
         case .hud(let state):
             showHUD(state)
         }
+    }
+
+    private func startStreamingIfEnabled() {
+        guard Preferences.liveTranscription,
+              let pipe = (transcriber as? WhisperKitTranscriber)?.whisperKit else { return }
+        let hint = TranscribeHint(language: Preferences.language == "auto" ? nil : Preferences.language,
+                                  vocabulary: DictionaryCache.shared.terms)
+        streaming.start(pipe: pipe, processor: streamProcessor, hint: hint)
+    }
+
+    /// Text to show in the bar while speaking: settled text plus the current hypothesis. Behind
+    /// `showTextInHUD`, which governs every appearance of transcript text on screen — on a bar that
+    /// never hides, that single switch is the whole privacy story.
+    private var liveBarText: String? {
+        guard Preferences.liveTranscription, Preferences.showTextInHUD else { return nil }
+        let combined = (streaming.confirmedText + " " + streaming.unconfirmedText)
+            .trimmingCharacters(in: .whitespaces)
+        return combined.isEmpty ? nil : combined
     }
 
     /// Rules 19-21, adapted for §1a. The spec gated pre-warming on "no server call expected",
@@ -325,7 +367,7 @@ final class Coordinator: ObservableObject {
     }
 
     private func render() {
-        panel.update(hud, levels: levels, latched: isLatched)
+        panel.update(hud, levels: levels, latched: isLatched, liveText: liveBarText)
     }
 }
 

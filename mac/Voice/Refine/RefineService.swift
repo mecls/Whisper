@@ -28,7 +28,7 @@ final class RefineService: Refiner {
         // Rules 11-14: a transcript that needs nothing skips the round trip entirely. Logged like
         // any other dictation, with `llmModel` marking it, because the skip rate is the only signal
         // that says whether the gate's thresholds are right.
-        if let reason = SkipGate.reasonToClean(raw: raw, mode: mode, language: d.language) {
+        if let reason = SkipGate.reasonToClean(raw: raw, mode: mode, language: d.language, segments: d.streamedSegments) {
             log.debug("cleaning: \(reason.rawValue, privacy: .public)")
         } else {
             await logOnly(d, injected: .raw, fallback: nil, mode: mode, llmModel: CleanupEngine.skipped)

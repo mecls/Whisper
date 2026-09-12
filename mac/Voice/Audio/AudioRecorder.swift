@@ -32,6 +32,15 @@ final class AudioRecorder {
 
     var isRunning: Bool { engine.isRunning }
 
+    /// Everything captured so far this session, without consuming it. For the streaming adapter.
+    var capturedSamples: [Float] { buffer.snapshot() }
+
+    /// Recent per-buffer RMS, newest last — the same values the bar's waveform draws. Streaming's
+    /// VAD reads this rather than measuring energy a second time: two independent measurements
+    /// would drift, and the waveform would then disagree with the gate deciding whether the user
+    /// is speaking.
+    private(set) var recentEnergy: [Float] = []
+
     deinit {
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
     }
@@ -156,6 +165,7 @@ final class AudioRecorder {
         }
         if !engine.isRunning { try engine.start() }
         _ = buffer.drain()
+        recentEnergy = []
         startedAt = Date()
         isCapturing = true
     }
@@ -226,7 +236,13 @@ final class AudioRecorder {
         let ptr = UnsafeBufferPointer(start: ch, count: Int(out.frameLength))
         buffer.write(ptr)
         let level = EnergyGate.rms(ArraySlice(ptr))
-        DispatchQueue.main.async { [weak self] in self?.onLevel?(level) }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.recentEnergy.append(level)
+            // Bounded: this is a rolling view for the waveform and the VAD, not a history.
+            if self.recentEnergy.count > 256 { self.recentEnergy.removeFirst(self.recentEnergy.count - 256) }
+            self.onLevel?(level)
+        }
         if buffer.isFull { DispatchQueue.main.async { [weak self] in self?.onCapReached?() } }
     }
 }

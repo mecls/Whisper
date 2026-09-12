@@ -510,6 +510,59 @@ Decisions already made for you, so you do not re-litigate them:
 - **A latched dictation is indistinguishable from a held one in the server payload**, so existing
   latency and word-count metrics stay comparable.
 
+### Decisions taken during the build
+
+**The WER gate in build step 7 could not be run, so live transcription ships disabled.** The spec
+(and the PRD behind it) says to compare streamed vs one-pass word error rate across "the 20 pt/en
+fixtures in `server/src/cli/bench-fixtures.ts`". Those fixtures are `string[]` — 20 text transcripts
+that exist to bench the LLM cleanup. There is no audio behind them. The only recordings in the repo
+are `mac/Fixtures/en.wav`, `pt-synthetic.wav` (an English voice reading Portuguese, already flagged
+in `GO_LIVE.md` §10) and `silence.wav`: two real samples, one synthetic. Two samples cannot support a
+two-percentage-point claim about text quality reaching a user's documents, and the spec says that
+judgement is not the builder's to make alone. Step 7 is built and complete behind
+`Preferences.liveTranscription`, defaulting to **off**; `GO_LIVE.md` item 45 records what would
+unblock it (record real audio for a dozen of those sentences). This was an error in the spec I wrote,
+not a property of the code.
+
+**Step 2's spike could not be automated, and did not need to be.** Verifying that a click on a
+non-activating panel leaves the frontmost app unchanged requires a real click, and posting synthetic
+`CGEvent` mouse events needs Accessibility permission for the *posting* process. The resolution was
+pre-decided either way — size the panel to its visible controls — and that is correct whether the
+spike passes or fails, so it was implemented directly. The click verification is `GO_LIVE.md` items
+37 and 38.
+
+**Invariant 18's stop condition passes.** `RingBuffer` does not wrap despite its name: `write` takes
+`n = min(count, capacity - head)`, so at capacity writes are dropped and `head` only grows until
+`drain()`. Indices cannot shift underneath `AudioStreamTranscriber`'s `lastBufferSize` tracking. A
+`snapshot()` was added for non-consuming reads — distinct from the purge the spec forbids, which
+exists only because WhisperKit's own processor grows unbounded.
+
+- **`TapLatch.Outcome` carries no `Date`.** `.holdOpen(until:)` put an absolute `Date` in an
+  `Equatable` payload, making every assertion compare Dates built by different arithmetic routes.
+  Both thresholds now compare whole milliseconds, which also fixes a real case: an exactly-300 ms
+  double-tap failing to latch on floating-point dust.
+- **Rule 6 needed only the Esc exception.** The spec called for staying on the idle event mask while
+  latched; that would also have blinded the app to Esc. `HotkeyInterpreter` already guards `keyDown`
+  on `isHeld`, and the key is not held during a latched session, so keystrokes were already being
+  ignored. The mask is unchanged.
+- **The segment count rides on the Coordinator's copy of `Dictation`**, not through `MachineEvent`.
+  It is an artefact of how the text was produced, not dictation state, and threading it through the
+  reducer would widen a deliberately small event set for one consumer.
+- **`asrMs` is 0 for streamed dictations.** Truthful rather than a gap: no transcription happens
+  after the key is released. `total_ms` remains the honest end-to-end measure.
+- **Streamed dictations report the configured language, not a detected one.**
+  `AudioStreamTranscriber.State` exposes no detected language. With language set to `auto` they
+  record `"auto"`. Noted rather than worked around.
+- **Three latent bugs in earlier work were fixed as the wiring exposed them**: `.cancelRequested`
+  returning `.hud(.hidden)` wiped any message shown before it (both the stray-tap and no-microphone
+  paths); `onCapReached` would have ended a latched session leaving `isLatched` true; and
+  `setChoice` rebuilding the interpreter silently un-latched a running session.
+
+### Not built, because §2 excludes it
+
+Typing live text progressively into the target app; server-side ASR; pause/resume within a session;
+raising the 90 s cap; a separate latch hotkey; dragging the bar. None were started.
+
 ## 17. Definition of Done
 
 > `cd mac && xcodegen generate && xcodebuild test -project Voice.xcodeproj -scheme Voice

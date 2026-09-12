@@ -24,6 +24,16 @@ final class RingBuffer {
         }
     }
 
+    /// Everything written so far, without consuming it.
+    ///
+    /// Streaming needs to read the buffer repeatedly while the dictation is still running, which
+    /// `drain` cannot do — it resets `head`, and the next read would return only what arrived since.
+    /// Safe to call from any thread, and deliberately *not* a purge: this buffer is already
+    /// fixed-capacity, so unlike WhisperKit's own processor it has no unbounded growth to trim.
+    func snapshot() -> [Float] {
+        lock.withLock { Array(storage[0..<head]) }
+    }
+
     func drain() -> [Float] {
         lock.withLock {
             let out = Array(storage[0..<head])
