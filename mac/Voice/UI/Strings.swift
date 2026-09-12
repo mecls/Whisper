@@ -15,6 +15,7 @@ enum Strings {
     static let pastedRaw = "Pasted raw — server slow or offline"
     static let tokenInvalid = "Token invalid — open Settings"
     static let secureField = "Secure field — text copied to clipboard instead"
+    static let noMicrophone = "No microphone available — check System Settings › Sound › Input"
     static let modelLoading = "Model loading"
     static let modelNotDownloaded = "Model not downloaded"
     static let copyLast = "Copy last dictation"

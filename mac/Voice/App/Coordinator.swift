@@ -112,7 +112,18 @@ final class Coordinator: ObservableObject {
         case .startRecording:
             levels = []
             hotkey.setListening(true)
-            try? recorder.start()
+            do {
+                try recorder.start()
+            } catch {
+                // Previously `try?`. A microphone that cannot be opened then produced a HUD that
+                // said "Listening" over an engine recording nothing, which is indistinguishable
+                // from the app working right up until no text appears — and gives the user nothing
+                // to act on. Say so and end the dictation instead.
+                log.error("could not start recording: \(String(describing: error), privacy: .public)")
+                showHUD(.message(Strings.noMicrophone))
+                send(.cancelRequested)
+                return
+            }
             prewarmConnection()   // rule 19: strictly after the microphone is open
             if Preferences.sounds { NSSound(named: "Tink")?.play() }
         case .stopRecording:
