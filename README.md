@@ -1,4 +1,4 @@
-# Miraside Voice
+# Spit
 
 A dictation app for macOS: hold a hotkey, speak, release, and clean text lands at the cursor. Audio runs locally via WhisperKit (CoreML), text refinement and history live on the VPS, and no data leaves the Mac unencrypted.
 
@@ -32,7 +32,7 @@ A dictation app for macOS: hold a hotkey, speak, release, and clean text lands a
 
 ## Status (2026-09-10)
 
-- **Server:** live on the VPS (vps) behind Traefik; HTTPS for `voice.miraside.co` is pending the DNS A record at Namecheap.
+- **Server:** live on the VPS (vps) behind Traefik; HTTPS for `voice.miraside.co` is live (Let’s Encrypt via Traefik).
 - **Mac app:** built through M5 with ad-hoc code signing (`-`); no Apple Development identity yet on this Mac.
 - **Tests:** 39 unit tests run on every commit; 1 opt-in ASR integration test (`VOICE_ASR_TESTS=1`) — everything requiring a microphone or a permission grant is in the manual checklist below.
 
@@ -41,8 +41,8 @@ A dictation app for macOS: hold a hotkey, speak, release, and clean text lands a
 ### A) From source (macOS 15+, Xcode 26)
 
 ```bash
-git clone <this-repo>
-cd miraside-voice/mac
+git clone https://github.com/mecls/spit.git
+cd spit/mac
 brew install xcodegen
 xcodegen generate
 open Voice.xcodeproj
