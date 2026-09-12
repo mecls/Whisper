@@ -7,10 +7,10 @@ import SwiftUI
 /// serves the click-through rule: the panel's frame is exactly the visible pill, so the region that
 /// can swallow a click is never larger than what the user can see.
 ///
-/// At rest it is just the mic in a pill: enough to say the app is running and to give the click a
-/// target, and nothing more. Mode and language used to sit beside it and were removed — they are
-/// already in the menu bar, and a permanent label restating settings that rarely change is exactly
-/// the kind of thing that makes a persistent bar feel like clutter.
+/// At rest it is a small outline lozenge and nothing else — no icon, no chrome around it. It exists
+/// to say "the app is running" and to give the click somewhere to land; anything more is a
+/// permanent object competing for attention with whatever the user is actually doing. The mic only
+/// appears once there is something to say.
 ///
 /// While listening it shows the waveform and nothing else. A moving waveform already says both
 /// things a status line could — that it is recording, and that it is genuinely hearing you — so
@@ -20,6 +20,9 @@ struct HUDView: View {
     @ObservedObject var model: HUDModel
 
     private enum Metric {
+        /// The resting lozenge. Small enough to read as screen furniture rather than a control.
+        static let idleWidth: CGFloat = 44
+        static let idleHeight: CGFloat = 12
         static let mic: CGFloat = 22
         static let icon: CGFloat = 11
         static let text: CGFloat = 10.5
@@ -33,20 +36,36 @@ struct HUDView: View {
     private var isListening: Bool { if case .listening = model.state { return true }; return false }
 
     var body: some View {
-        HStack(spacing: 7) {
-            micButton
-            if isListening {
-                waveform
-            } else if !isIdle {
-                statusContent
+        Group {
+            if isIdle {
+                idlePill
+            } else {
+                HStack(spacing: 7) {
+                    micButton
+                    if isListening { waveform } else { statusContent }
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.08)))
             }
-            // Idle renders nothing beside the mic — the pill itself is the signal.
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.08)))
         .fixedSize()
+    }
+
+    /// The resting state: the whole lozenge is the click target, so there is no separate button to
+    /// draw. Deliberately carries no padding or outer capsule — those would triple its footprint,
+    /// and the panel is sized to this view, so every point of chrome is a point of screen it
+    /// permanently occupies and a point that could swallow someone's click.
+    private var idlePill: some View {
+        Button(action: { model.onMicTap?() }) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.22))
+                .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 1))
+                .frame(width: Metric.idleWidth, height: Metric.idleHeight)
+        }
+        .buttonStyle(.plain)
+        .help(Strings.appName)
     }
 
     /// The one interactive element. Red while latched — which is also the only latched indicator
