@@ -29,10 +29,23 @@ final class VoiceAudioProcessor: AudioProcessing {
     /// dictation ends, so the indices `AudioStreamTranscriber` tracks through it stay valid.
     var audioSamples: ContiguousArray<Float> { ContiguousArray(recorder.capturedSamples) }
 
-    /// The same RMS values the bar's waveform draws. Deliberately one measurement, not two: an
-    /// independent energy calculation would drift from the waveform, and the VAD deciding whether
-    /// the user is speaking would then disagree with what the user can see.
-    var relativeEnergy: [Float] { recorder.recentEnergy }
+    /// Speech loudness on the 0-1 scale WhisperKit's VAD expects.
+    ///
+    /// `EnergyGate.rms` is a raw RMS amplitude — roughly 0.02-0.15 for speech and 0.002 for room
+    /// tone — while `relativeEnergy` is documented as normalised 0-1, and the streaming loop calls
+    /// anything under `silenceThreshold` (0.3) silence. Handing it raw RMS meant every buffer read
+    /// as silence: the loop skipped every transcribe, produced no segments, and every dictation
+    /// fell back to a one-pass transcription. Nothing errored and nothing was logged, so live
+    /// transcription appeared to be on for hours while never once running.
+    ///
+    /// Still derived from the same measurement the waveform draws, so what the VAD acts on and what
+    /// the user sees cannot drift apart.
+    var relativeEnergy: [Float] { recorder.recentEnergy.map { min(1, $0 / Self.speechFloor) } }
+
+    /// RMS at which speech is considered unambiguously present. Chosen against `EnergyGate`'s own
+    /// `hasSpeech` threshold of 0.01, which is the level this app already treats as "not silence";
+    /// 0.05 puts normal speech comfortably above 0.3 and leaves room tone far below it.
+    private static let speechFloor: Float = 0.05
 
     var relativeEnergyWindow: Int = 20
 

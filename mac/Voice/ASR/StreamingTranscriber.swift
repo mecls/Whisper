@@ -77,6 +77,7 @@ final class StreamingTranscriber: ObservableObject {
         }
         self.streamer = streamer
 
+        log.info("live transcription starting")
         task = Task { [weak self] in
             do {
                 try await streamer.startStreamTranscription()
@@ -111,7 +112,13 @@ final class StreamingTranscriber: ObservableObject {
         streamer = nil
 
         let text = confirmedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return nil }
+        guard !text.isEmpty else {
+            // Loud on purpose. This is the silent-fallback path, and when the VAD scale was wrong
+            // it took every dictation for hours without a single line in the log to say so.
+            log.error("live transcription produced nothing — falling back to a one-pass transcription")
+            return nil
+        }
+        log.info("live transcription used: \(self.confirmedSegmentCount, privacy: .public) segments")
         return (text, confirmedSegmentCount)
     }
 
