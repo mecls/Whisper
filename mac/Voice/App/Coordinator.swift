@@ -41,9 +41,7 @@ final class Coordinator: ObservableObject {
     private let injector = TextInjector()
     private let panel = HUDPanel()
     private var levels: [Float] = []
-    private var hudShowWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
-    private var panelShown = false   // separates "update" (levels/state can change any time) from "reveal"
 
     var transcriber: Transcriber = WhisperKitTranscriber(modelId: Preferences.modelId)
     var refiner: Refiner = PassthroughRefiner()               // replaced in Task 8
@@ -72,6 +70,8 @@ final class Coordinator: ObservableObject {
             self.handleHotkey(a, at: Date())
         }
         try? recorder.prepare()
+        panel.onMicTap = { [weak self] in self?.toggleLatchedFromBar() }
+        panel.applyVisibility()      // the bar is on screen from launch, not from the first dictation
         _ = hotkey.start()
         // G1: a server-driven hotkey change must go through setHotkey (owns writing Preferences.hotkey
         // AND re-arming the hotkey monitor) — wired before sync.start() so the very first sync can use it.
@@ -129,6 +129,7 @@ final class Coordinator: ObservableObject {
             cancelLatchWindow()
             isLatched = true
             hotkey.setLatched(true)
+            render()
 
         case .endSession:
             cancelLatchWindow()
@@ -170,6 +171,7 @@ final class Coordinator: ObservableObject {
     private func clearLatch() {
         isLatched = false
         hotkey.setLatched(false)
+        render()
     }
 
     /// The 90 s ceiling. Reachable for the first time now — nobody holds a key for 90 seconds, but
@@ -282,40 +284,48 @@ final class Coordinator: ObservableObject {
 
     private func showHUD(_ state: HUDState) {
         hud = state
-        hudShowWork?.cancel(); hideWork?.cancel()
-        switch state {
-        case .hidden:
-            panelShown = false
-            panel.hide()
-        case .listening:
-            // 150 ms delay: Fn+arrow combos cancel before the HUD ever appears. Nothing between
-            // now and the timer firing (onLevel's render() calls included) may reveal the panel.
-            let w = DispatchWorkItem { [weak self] in
-                self?.panelShown = true
-                self?.render()
-            }
-            hudShowWork = w
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: w)
-        case .done, .message:
-            panelShown = true
-            render()
-            let w = DispatchWorkItem { [weak self] in
-                self?.panelShown = false
-                self?.panel.hide()
-            }
-            hideWork = w
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: w)
-        default:
-            panelShown = true
-            render()
-        }
+        hideWork?.cancel()
+        render()
+        // The bar no longer appears and disappears with the dictation, so `.done` and `.message`
+        // revert its *content* to idle rather than hiding the panel. The old 150 ms reveal delay
+        // for `.listening` is gone with the auto-hide it existed for: there is nothing to reveal.
+        if case .done = state { scheduleReturnToIdle() }
+        if case .message = state { scheduleReturnToIdle() }
     }
 
-    /// Updates the panel's content only once it has been revealed (see `showHUD`'s `.listening`
-    /// case) — called on every level tick, but a no-op until `panelShown` is set.
+    private func scheduleReturnToIdle() {
+        let w = DispatchWorkItem { [weak self] in self?.showHUD(.hidden) }
+        hideWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: w)
+    }
+
+    /// Called from the menu's "Show bar" toggle.
+    func refreshBarVisibility() { panel.applyVisibility() }
+
+    /// The bar's mic button. Mouse-started sessions are always hands-free — there is no mouse
+    /// equivalent of holding a key down.
+    private func toggleLatchedFromBar() {
+        guard !paused else { return }
+        if isLatched {
+            cancelLatchWindow()
+            clearLatch()
+            tapLatch.reset()
+            send(.hotkeyUp)
+            return
+        }
+        send(.hotkeyDown(FrontmostContext.current()))
+        // Only latch if a recording actually started. `.hotkeyDown` refuses while the model is
+        // still loading, and latching over a dictation that never began would leave the indicator
+        // claiming a live microphone.
+        guard hud == .listening else { return }
+        tapLatch.forceLatched()
+        isLatched = true
+        hotkey.setLatched(true)
+        render()
+    }
+
     private func render() {
-        guard panelShown else { return }
-        panel.show(hud, levels: levels)
+        panel.update(hud, levels: levels, latched: isLatched)
     }
 }
 

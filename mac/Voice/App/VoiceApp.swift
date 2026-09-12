@@ -11,9 +11,13 @@ struct VoiceApp: App {
     @Environment(\.openWindow) private var openWindow
     @AppStorage(Preferences.Key.mode) private var mode = Preferences.mode
     @AppStorage(Preferences.Key.language) private var language = Preferences.language
+    @AppStorage(Preferences.Key.showBar) private var showBar = Preferences.showBar
 
     private var menuIcon: String {
         if sync.unauthorized { return "mic.badge.xmark" }
+        // Ranked above `.listening`: a hands-free session left running is the one state worth
+        // spotting from the menu bar, because the bar itself can sit behind a full-screen app.
+        if coordinator.isLatched { return "record.circle.fill" }
         return coordinator.hud == .listening ? "mic.fill" : "mic"
     }
 
@@ -38,6 +42,8 @@ struct VoiceApp: App {
                 if let t = coordinator.lastText { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(t, forType: .string) }
             }.disabled(coordinator.lastText == nil)
             Button(coordinator.paused ? Strings.resume : Strings.pause) { coordinator.paused.toggle() }
+            Toggle(Strings.showBar, isOn: $showBar)
+                .onChange(of: showBar) { _, _ in coordinator.refreshBarVisibility() }
             Divider()
             Button(Strings.insightsMenuItem) { openWindow(id: "insights"); NSApp.activate(ignoringOtherApps: true) }
             Button(Strings.setUpPermissions) { openWindow(id: "onboarding"); NSApp.activate(ignoringOtherApps: true) }

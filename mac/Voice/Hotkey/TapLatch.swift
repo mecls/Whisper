@@ -125,6 +125,10 @@ struct TapLatch {
     /// `isLatched` true over a session that is already over.
     mutating func reset() { state = .idle }
 
+    /// Enters the latched state without a gesture, for a session started from the bar's mic button.
+    /// There is one session concept, not two: the key must be able to end what the mouse started.
+    mutating func forceLatched() { state = .latched }
+
     /// Called by `Coordinator` when the window timer fires.
     mutating func windowExpired(at now: Date) -> [Outcome] {
         guard case .windowOpen(let releasedAt) = state,

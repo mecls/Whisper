@@ -20,6 +20,7 @@ enum Strings {
     static let tapTooShort = "Too short — tap twice to dictate hands-free"
     static let latched = "hands-free"
     static let latchCapReached = "Reached the 90 s limit — transcribing"
+    static let showBar = "Show bar"
     static let modelLoading = "Model loading"
     static let modelNotDownloaded = "Model not downloaded"
     static let copyLast = "Copy last dictation"
