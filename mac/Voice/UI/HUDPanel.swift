@@ -105,18 +105,36 @@ final class HUDPanel: NSPanel {
     ///
     /// `layoutSubtreeIfNeeded()` forces the pending layout so `fittingSize` is current, and
     /// `setFrame` applies origin and size together so no intermediate state is ever displayed.
+    /// Where the bar sits, from the screen's two rectangles and the size SwiftUI measured.
+    ///
+    /// Pulled out of `layoutToFit` because it is pure geometry that otherwise needs a live
+    /// `NSScreen` to exercise — and because the bug it had was invisible on the machine it was
+    /// written on. With the Dock at the bottom, `frame` and `visibleFrame` agree horizontally, so
+    /// centring on either looks identical. Move the Dock to a side and they stop agreeing.
+    ///
+    /// The two axes deliberately read different rectangles:
+    ///
+    /// - **x** from `frame`, the physical display. "Centred" means centred on the screen the user
+    ///   is looking at. `visibleFrame` begins after a left-hand Dock, so its midpoint sits half a
+    ///   Dock-width to the right — 44pt on the 88pt Dock this was reported against.
+    /// - **y** from `visibleFrame`, which is the right rectangle there and the reason the two were
+    ///   ever conflated: it already excludes a bottom Dock, so sitting 10pt above its `minY` keeps
+    ///   the bar clear of the Dock, or against the screen edge when the Dock is hidden or on a side.
+    ///
+    /// Rounded because a half-pixel origin makes the material background shimmer as the bar resizes.
+    static func barOrigin(screen: NSRect, visible: NSRect, size: NSSize) -> NSPoint {
+        NSPoint(x: (screen.midX - size.width / 2).rounded(),
+                y: (visible.minY + 10).rounded())
+    }
+
     private func layoutToFit() {
         guard let host = contentView else { return }
         host.layoutSubtreeIfNeeded()
         let size = host.fittingSize
         guard size.width > 1, size.height > 1 else { return }
-        guard let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
-        // `visibleFrame` already excludes the Dock, so this is measured from above it (or from the
-        // screen edge when the Dock is hidden). Rounded because a half-pixel origin makes the
-        // material background shimmer as the bar resizes.
-        let origin = NSPoint(x: (visible.midX - size.width / 2).rounded(),
-                             y: (visible.minY + 10).rounded())
+        let origin = Self.barOrigin(screen: screen.frame, visible: screen.visibleFrame, size: size)
         let target = NSRect(origin: origin, size: size)
         guard frame != target else { return }
         setFrame(target, display: true)
