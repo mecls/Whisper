@@ -264,17 +264,30 @@ final class Coordinator: ObservableObject {
                 // release→paste no longer contains an ASR pass. `asrMs` is 0 for these because no
                 // transcription happened after the key came up; the work was done while speaking.
                 if let streamed = await self?.streaming.finish() {
-                    // How much of the recording the stream's segments never reached.
-                    // `AudioStreamTranscriber` only transcribes once a full second of new audio has
-                    // arrived and does no final pass when it stops, so some tail is always left
-                    // over. Logged rather than assumed: if it turns out to cost real words, the fix
-                    // is one short pass over the remainder, and this says whether that is worth it.
-                    if let covered = self?.streaming.coveredMs, d.audioMs > covered {
-                        log.info("stream tail not transcribed: \(d.audioMs - covered, privacy: .public) ms of \(d.audioMs, privacy: .public) ms")
+                    // The stream stops at the last segment Whisper produced, and
+                    // `AudioStreamTranscriber` runs no final pass when it is told to stop — it only
+                    // transcribes once a full second of new audio has arrived, and whatever came in
+                    // after the last pass started is simply never transcribed. This was assumed to
+                    // be a sub-second rounding error. Measured, it was 4396 ms of a 15295 ms
+                    // dictation: 29% of what the user said, silently missing from the paste.
+                    //
+                    // So the tail gets one pass of its own. It is over the leftover audio only, not
+                    // the whole recording, which is what keeps release→paste short — the streamed
+                    // part is already transcribed and is not redone.
+                    let covered = self?.streaming.coveredMs ?? 0
+                    var text = streamed.text
+                    var asrMs = 0
+                    if let tail = Self.tail(of: samples, afterMs: covered, totalMs: d.audioMs) {
+                        log.info("transcribing stream tail: \(d.audioMs - covered, privacy: .public) ms of \(d.audioMs, privacy: .public) ms")
+                        if let t = try? await self?.transcriber.transcribe(tail, hint: hint, progress: nil) {
+                            let extra = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !extra.isEmpty { text += " " + extra }
+                            asrMs = t.durationMs
+                        }
                     }
                     self?.streamedSegments[id] = streamed.segments
-                    self?.send(.transcribed(id, text: streamed.text,
-                                            language: hint.language ?? "auto", ms: 0))
+                    self?.send(.transcribed(id, text: text,
+                                            language: hint.language ?? "auto", ms: asrMs))
                     return
                 }
                 do {
@@ -393,6 +406,33 @@ final class Coordinator: ObservableObject {
     private func render() {
         panel.update(hud, levels: levels, latched: isLatched, liveText: liveBarText)
     }
+
+    // MARK: - Streamed tail
+
+    /// The audio after `afterMs` that the stream never transcribed, or nil when there is nothing
+    /// there worth a pass.
+    ///
+    /// Two guards, and removing either can only make the result worse. A gap under `minimumTailMs`
+    /// is not a word, and handing Whisper a very short clip invites a hallucinated one. And a gap
+    /// that is *silence* — the ordinary case of stopping talking a beat before letting go of the
+    /// key — is exactly what Whisper hallucinates on, so `EnergyGate`, the same gate that decides
+    /// whether a whole dictation contains speech, decides this too.
+    ///
+    /// The offset comes from the sample count rather than a hard-coded rate, so it cannot drift
+    /// away from whatever the recorder is actually producing.
+    static func tail(of samples: [Float], afterMs: Int, totalMs: Int) -> [Float]? {
+        guard totalMs > 0, !samples.isEmpty, afterMs >= 0 else { return nil }
+        guard totalMs - afterMs >= minimumTailMs else { return nil }
+        let start = Int((Double(afterMs) / Double(totalMs)) * Double(samples.count))
+        guard start >= 0, start < samples.count else { return nil }
+        let tail = Array(samples[start...])
+        guard EnergyGate.hasSpeech(tail) else { return nil }
+        return tail
+    }
+
+    /// Below this, a gap is a pause or a rounding error rather than a word.
+    static let minimumTailMs = 400
+
 }
 
 // Task 6 stub. Superseded by WhisperKitTranscriber (Task 7) as the Coordinator's default, but kept
@@ -408,4 +448,5 @@ struct FixedTextTranscriber: Transcriber {
 struct PassthroughRefiner: Refiner {
     func refine(_ d: Dictation, mode: String) async -> RefineResult { .literal }
     func reportInjected(clientId: UUID, injected: Injected, totalMs: Int?) async {}
+
 }
