@@ -30,11 +30,11 @@ A dictation app for macOS: hold a hotkey, speak, release, and clean text lands a
 
 **Why this split:** everything latency-critical (hotkey, audio, ASR, paste) runs locally and works offline. The backend owns the only shared secret (Ollama API key), the team's history, and the dictionary. The wire carries text only — audio never leaves the Mac, transcripts never land on disk.
 
-## Status (2026-09-10)
+## Status (2026-09-12)
 
 - **Server:** live on the VPS (vps) behind Traefik; HTTPS for `voice.miraside.co` is live (Let’s Encrypt via Traefik).
-- **Mac app:** built through M5 with ad-hoc code signing (`-`); no Apple Development identity yet on this Mac.
-- **Tests:** 39 unit tests run on every commit; 1 opt-in ASR integration test (`VOICE_ASR_TESTS=1`) — everything requiring a microphone or a permission grant is in the manual checklist below.
+- **Mac app:** built through M5 and signed with an Apple Development identity (team `FZC6P6XRGD`). The designated requirement stays constant across rebuilds, which is what stops macOS re-asking for Accessibility, Input Monitoring and Microphone every time — `mac/scripts/package.sh` fails loudly rather than quietly falling back to ad-hoc signing.
+- **Tests:** 137 Mac unit tests and 81 server tests; 1 opt-in ASR integration test (`VOICE_ASR_TESTS=1`) — everything requiring a microphone or a permission grant is in the manual checklist below.
 
 ## Install for teammates
 
