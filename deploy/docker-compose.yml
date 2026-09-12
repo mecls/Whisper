@@ -19,7 +19,7 @@ services:
     networks: [default, edge]
     labels:
       traefik.enable: "true"
-      traefik.docker.network: <proxy-network>
+      traefik.docker.network: ${PROXY_NETWORK}
       traefik.http.routers.voice.rule: Host(`voice.miraside.co`)
       traefik.http.routers.voice.entrypoints: websecure
       traefik.http.routers.voice.tls: "true"
@@ -46,5 +46,12 @@ volumes:
 networks:
   default:
   edge:
+    # The shared Traefik network, read from deploy/.env rather than written here.
+    # It used to be a literal placeholder, which meant the committed file could never be
+    # deployed as-is: every rsync (VPS.md §4a) overwrote the box's hand-patched copy with
+    # the placeholder, `docker compose up` failed with "network <proxy-network> declared as
+    # external, but could not be found", and — because the build succeeds first — the old
+    # container kept running and the deploy looked like it had worked. .env is excluded
+    # from that rsync, so keeping the real name there survives every sync.
     external: true
-    name: <proxy-network>
+    name: ${PROXY_NETWORK}
