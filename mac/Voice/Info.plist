@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Voice</string>
+	<string>Spit</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconName</key>
@@ -29,6 +29,6 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Miraside</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Voice records your speech while you hold the dictation key. Audio never leaves this Mac.</string>
+	<string>Spit records your speech while you hold the dictation key. Audio never leaves this Mac.</string>
 </dict>
 </plist>

@@ -1,6 +1,6 @@
 /// Every user-facing string. One file so a pt-PT pass later is one edit.
 enum Strings {
-    static let appName = "Voice"
+    static let appName = "Spit"
     static let idle = "Ready — hold Fn to dictate"
     static let listening = "Listening…"
     static let transcribing = "Transcribing…"
@@ -34,7 +34,7 @@ enum Strings {
     /// For the sidebar row, which reveals settings in place rather than opening anything. An
     /// ellipsis there would promise a window that never appears.
     static let settingsNav = "Settings"
-    static let quit = "Quit Voice"
+    static let quit = "Quit Spit"
     static let mode = "Mode"
     static let language = "Language"
     static let modeClean = "Clean"
@@ -49,7 +49,7 @@ enum Strings {
     static let insightsTitle = "Insights"
     static let insightsMenuItem = "Insights…"
     static let insightsRefresh = "Refresh"
-    static let insightsEmpty = "Dictations will appear here once you start using Voice."
+    static let insightsEmpty = "Dictations will appear here once you start using Spit."
     static let cardTotalWords = "Total words"
     static let cardTotalWordsCaption = "total words"
     static let cardWpm = "Words per minute"
@@ -68,7 +68,7 @@ enum Strings {
     static let modelLabelLarge = "Large v3 Turbo (full, ~1.5 GB) — maximum accuracy"
 
     // Onboarding
-    static let onboardingTitle = "Set up Voice"
+    static let onboardingTitle = "Set up Spit"
     static let permMicrophone = "Microphone"
     static let permInputMonitoring = "Input Monitoring (to see the Fn key)"
     static let permAccessibility = "Accessibility (to paste with ⌘V)"
@@ -112,7 +112,7 @@ enum Strings {
     static let defaultLanguage = "Default language"
 
     static let serverURLLabel = "Server URL"
-    static let serverURLChangeNote = "Changing the server URL requires relaunching Voice."
+    static let serverURLChangeNote = "Changing the server URL requires relaunching Spit."
     static let apiTokenLabel = "API token"
     static let saveToken = "Save token"
     static let testConnection = "Test connection"

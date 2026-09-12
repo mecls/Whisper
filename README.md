@@ -57,14 +57,14 @@ The app runs ad-hoc by default. If you have an Apple Developer account, set `VOI
 
 ### B) From a zip (macOS 15+)
 
-1. Download `Voice-<version>.zip` from a colleague.
+1. Download `Spit-<version>.zip` from a colleague.
 2. Unzip it and remove the quarantine attribute:
    ```bash
-   unzip Voice-*.zip
-   xattr -d com.apple.quarantine Voice.app
+   unzip Spit-*.zip
+   xattr -d com.apple.quarantine Spit.app
    ```
-3. Move `Voice.app` to `/Applications`.
-4. Double-click to launch. macOS 15+ will show **"Voice cannot be opened because it is from an unidentified developer"** — click **"Open Anyway"** (System Settings › Privacy & Security if the button does not appear).
+3. Move `Spit.app` to `/Applications`. If an older `Voice.app` is there, quit it and delete it first — it is the same app under its old name, and your token, model and settings carry over.
+4. Double-click to launch. macOS 15+ will show **"Spit cannot be opened because it is from an unidentified developer"** — click **"Open Anyway"** (System Settings › Privacy & Security if the button does not appear).
 5. Grant Input Monitoring and Accessibility when prompted (macOS will open System Settings).
 6. Return to the app, open **Settings › Server**, paste your device token → click **Save token** → click **Test connection** (the menu then shows your name).
 

@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 xcodegen generate
 xcodebuild -project Voice.xcodeproj -scheme Voice -configuration Release -derivedDataPath build -quiet build
-APP=build/Build/Products/Release/Voice.app
+APP=build/Build/Products/Release/Spit.app
 # The embedded profile comes from a free Personal Team and expires in 7 days. It is
 # irrelevant here (the app declares no entitlements), so it is stripped — which
 # invalidates the signature and is why the app is re-signed immediately below.
@@ -33,5 +33,5 @@ codesign --force --deep --sign "$IDENTITY" "$APP"
 # permission grants alive across rebuilds, so a silent fallback to ad-hoc must fail loudly.
 codesign -dv --verbose=2 "$APP" 2>&1 | grep -E "Signature|TeamIdentifier" >&2
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")
-ditto -c -k --keepParent "$APP" "build/Voice-$VERSION.zip"
-echo "build/Voice-$VERSION.zip"
+ditto -c -k --keepParent "$APP" "build/Spit-$VERSION.zip"
+echo "build/Spit-$VERSION.zip"

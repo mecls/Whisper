@@ -38,6 +38,10 @@ targets:
   Voice:
     type: application
     platform: macOS
+    # XcodeGen derives the product's file reference and the test bundle's TEST_HOST from this, not
+    # from the PRODUCT_NAME build setting below — without it the tests look for Voice.app, which no
+    # longer exists, and fail to launch.
+    productName: Spit
     sources: [Voice]
     dependencies:
       - package: WhisperKit
@@ -45,7 +49,7 @@ targets:
     info:
       path: Voice/Info.plist
       properties:
-        CFBundleDisplayName: Voice
+        CFBundleDisplayName: Spit
         # Names the asset-catalog icon set. macOS needs this in Info.plist as well as
         # ASSETCATALOG_COMPILER_APPICON_NAME below — with only the build setting the icon
         # compiles into Assets.car but the Dock still shows the generic placeholder.
@@ -59,7 +63,7 @@ targets:
         # a dock icon that flickers in at launch or never appears at all.
         LSUIElement: false
         LSMinimumSystemVersion: "15.0"
-        NSMicrophoneUsageDescription: "Voice records your speech while you hold the dictation key. Audio never leaves this Mac."
+        NSMicrophoneUsageDescription: "Spit records your speech while you hold the dictation key. Audio never leaves this Mac."
         NSHumanReadableCopyright: "Miraside"
     entitlements:
       path: Voice/Voice.entitlements
@@ -67,6 +71,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: co.miraside.voice
+        # The app is called Spit wherever a person reads it — Spit.app, the Dock, the menu bar —
+        # but its identity is still Voice's. The bundle id, the Keychain service and the
+        # Application Support folder are unchanged, because TCC grants, the saved token and the
+        # 630 MB model are all keyed on them; renaming any would silently log users out,
+        # re-prompt three permissions, or re-download the model.
+        PRODUCT_NAME: Spit
+        # PRODUCT_MODULE_NAME defaults to PRODUCT_NAME. Pinned, or the rename above would also
+        # rename the Swift module and break `@testable import Voice` in every test file.
+        PRODUCT_MODULE_NAME: Voice
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Manual
         # Named in full, not as the generic "Apple Development": Xcode maps that generic
