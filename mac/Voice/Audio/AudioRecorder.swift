@@ -21,14 +21,14 @@ final class AudioRecorder {
     private var startedAt: Date?
     private var idleStopTimer: Timer?
     private var configObserver: NSObjectProtocol?
-    private var rebuildQueued = false
     var onLevel: ((Float) -> Void)?
     var onCapReached: (() -> Void)?
     private(set) var isCapturing = false
 
-    /// The format the tap and converter are currently built for. Exposed for diagnostics: when a
-    /// dictation comes back empty, the first question is which device the engine was actually on.
-    private(set) var inputFormat: AVAudioFormat?
+    /// The format buffers are actually arriving in. Diagnostics only: when a dictation comes back
+    /// empty the first question is which device the engine was really on, and that was previously
+    /// unanswerable without attaching a debugger.
+    private(set) var captureFormat: AVAudioFormat?
 
     var isRunning: Bool { engine.isRunning }
 
@@ -46,31 +46,44 @@ final class AudioRecorder {
         try installTap()
     }
 
-    /// Reads the *current* input format and rebuilds everything that depends on it.
+    /// Re-installs the input tap for whatever device is current.
     ///
-    /// Every device change has to come through here. An `AVAudioConverter` is built for one
-    /// specific input format and a tap is installed with one specific format, so neither survives
-    /// the input device being swapped underneath them.
+    /// Only the tap lives here. The converter is built inside `consume` from the format that
+    /// actually arrives, because that is the only format guaranteed to be true — during a route
+    /// change the node advertises one thing and delivers another.
     private func installTap() throws {
         let input = engine.inputNode
-        let inFormat = input.outputFormat(forBus: 0)
-        // A device that has just disappeared reports 0 channels / 0 Hz, and installing a tap with
-        // that format throws inside AVFoundation. Fail here instead, with a reason.
+
+        // Stop before touching the input chain. Reconfiguring it on a live engine is what raises
+        // `Failed to initialize active nodes in input chain! err = -10868`
+        // (kAudioUnitErr_FormatNotSupported) — an Objective-C exception, so Swift cannot catch it
+        // and the process aborts.
+        if engine.isRunning { engine.stop() }
+
+        // `inputFormat(forBus:)`, not `outputFormat(forBus:)`. AVAudioEngine asserts
+        // `format.sampleRate == inputHWFormat.sampleRate` when installing the tap, and it is the
+        // *hardware* format it compares against. The two agree while the device is stable and
+        // diverge for a moment during a route change — which is precisely when this runs, so the
+        // stale one aborted the process every time the input device changed.
+        let inFormat = input.inputFormat(forBus: 0)
+        // A device mid-handover, or one that has just disappeared, reports 0 channels / 0 Hz.
         guard inFormat.channelCount > 0, inFormat.sampleRate > 0 else {
-            inputFormat = nil
-            converter = nil
             input.removeTap(onBus: 0)
             log.error("no usable audio input (format \(inFormat, privacy: .public))")
             throw AudioRecorderError.noInputDevice
         }
-        converter = AVAudioConverter(from: inFormat, to: targetFormat)
-        inputFormat = inFormat
+
         input.removeTap(onBus: 0)
+        // The format is named explicitly rather than passed as nil. `nil` asks the engine to use
+        // the node's own format, which sounds safer and is not: on a Bluetooth input it fails to
+        // initialise the input chain at launch with the same -10868. Reading the format and
+        // handing it straight back is what this engine accepts.
         input.installTap(onBus: 0, bufferSize: 1024, format: inFormat) { [weak self] pcm, _ in
             self?.consume(pcm)
         }
         engine.prepare()
-        log.info("audio input ready: \(inFormat.sampleRate, privacy: .public) Hz, \(inFormat.channelCount, privacy: .public) ch")
+        captureFormat = inFormat
+        log.info("audio tap installed: \(inFormat.sampleRate, privacy: .public) Hz, \(inFormat.channelCount, privacy: .public) ch")
     }
 
     /// Rebuilds the capture chain whenever the engine's configuration changes.
@@ -88,14 +101,19 @@ final class AudioRecorder {
             object: engine,
             queue: nil
         ) { [weak self] _ in
-            // Posted on an arbitrary thread; every field it touches belongs to main.
-            DispatchQueue.main.async { self?.rebuildForCurrentDevice(reason: "configuration change") }
+            // Posted on an arbitrary thread, and posted *during* the route change rather than
+            // after it. Rebuilding immediately catches CoreAudio mid-handover, when the input
+            // node still reports the old device's format and initialising the chain with it
+            // aborts the process. The delay lets the new device settle first; it costs nothing,
+            // because the engine is already stopped by the system at this point.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self?.rebuildForCurrentDevice(reason: "configuration change")
+            }
         }
     }
 
     private func rebuildForCurrentDevice(reason: String) {
         dispatchPrecondition(condition: .onQueue(.main))
-        rebuildQueued = false
 
         // The system stops the engine when the configuration changes. Remember whether we owe it a
         // restart before touching anything.
@@ -131,10 +149,11 @@ final class AudioRecorder {
         // engine was paused, a configuration change may not have reached us at all. Cheap to check,
         // and it is the difference between the first dictation after plugging in AirPods working
         // and silently recording nothing.
-        if converter == nil || !Self.formatsMatch(engine.inputNode.outputFormat(forBus: 0), inputFormat) {
+        let live = engine.inputNode.inputFormat(forBus: 0)
+        guard live.channelCount > 0, live.sampleRate > 0 else { throw AudioRecorderError.noInputDevice }
+        if !Self.formatsMatch(live, captureFormat) {
             rebuildForCurrentDevice(reason: "input changed while idle")
         }
-        guard converter != nil else { throw AudioRecorderError.noInputDevice }
         if !engine.isRunning { try engine.start() }
         _ = buffer.drain()
         startedAt = Date()
@@ -174,19 +193,25 @@ final class AudioRecorder {
     }
 
     private func consume(_ pcm: AVAudioPCMBuffer) {
-        guard isCapturing, let converter else { return }
+        guard isCapturing else { return }
 
-        // A buffer from the previous device can still arrive between the route changing and the
-        // notification being handled. Feeding it to a converter built for a different format does
-        // not fail loudly — it yields near-silence, which is the worst possible outcome: enough
-        // signal to pass the energy gate, nothing for the transcriber. Drop it and rebuild.
-        guard Self.formatsMatch(pcm.format, converter.inputFormat) else {
-            if !rebuildQueued {
-                rebuildQueued = true
-                DispatchQueue.main.async { [weak self] in self?.rebuildForCurrentDevice(reason: "format mismatch on capture") }
+        // The converter is built from the format that actually arrived, not from the one the
+        // input node advertised when the tap was installed. During a device change those two
+        // disagree, and converting with the stale one does not fail loudly — it yields
+        // near-silence: enough signal to clear the energy gate, nothing for the transcriber. That
+        // is what made connecting AirPods mid-session look like the app had gone deaf.
+        //
+        // `converter` is touched only here, on the tap's own serial thread, so it needs no lock.
+        if !Self.formatsMatch(pcm.format, converter?.inputFormat) {
+            guard let rebuilt = AVAudioConverter(from: pcm.format, to: targetFormat) else { return }
+            converter = rebuilt
+            let arrived = pcm.format
+            DispatchQueue.main.async { [weak self] in
+                self?.captureFormat = arrived
+                log.info("capture format now \(arrived.sampleRate, privacy: .public) Hz, \(arrived.channelCount, privacy: .public) ch")
             }
-            return
         }
+        guard let converter else { return }
 
         let ratio = targetFormat.sampleRate / pcm.format.sampleRate
         let capacity = AVAudioFrameCount(Double(pcm.frameLength) * ratio) + 16
