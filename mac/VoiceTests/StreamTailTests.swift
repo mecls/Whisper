@@ -29,8 +29,35 @@ final class StreamTailTests: XCTestCase {
         let samples = speech(ms: 15295)
         let tail = try XCTUnwrap(Coordinator.tail(of: samples, afterMs: 10899, totalMs: 15295),
                                  "4396 ms of speech went untranscribed; it must be passed on, not dropped.")
-        // 4396/15295 of the recording, within a sample or two of rounding.
-        XCTAssertEqual(Double(tail.count), Double(samples.count) * 4396 / 15295, accuracy: 4)
+        // 4396 ms of new audio plus the overlap, which starts the pass before the boundary.
+        let expectedMs = Double(15295 - (10899 - Coordinator.overlapMs))
+        XCTAssertEqual(Double(tail.count), Double(samples.count) * expectedMs / 15295, accuracy: 4)
+    }
+
+    /// The pass must start *before* the boundary, or the word straddling it is sliced in half in
+    /// the audio, transcribed wrongly, and then preferred over the stream's copy by `Stitch` —
+    /// which is how "and" went missing from a dictation.
+    func testThePassStartsBeforeTheBoundarySoNoWordIsSplit() throws {
+        let samples = speech(ms: 10000)
+        let tail = try XCTUnwrap(Coordinator.tail(of: samples, afterMs: 8000, totalMs: 10000))
+        let butted = Double(samples.count) * 2000 / 10000
+        XCTAssertGreaterThan(Double(tail.count), butted,
+                             "The tail starts exactly at the boundary, so the word crossing it is cut in half.")
+        XCTAssertEqual(Double(tail.count), Double(samples.count) * 3500 / 10000, accuracy: 4)
+    }
+
+    /// The overlap must not turn a gap too small to matter into one worth transcribing: the
+    /// decision is about the real gap, the padding only about where the pass starts.
+    func testTheOverlapDoesNotResurrectATrivialGap() {
+        let samples = speech(ms: 5000)
+        XCTAssertNil(Coordinator.tail(of: samples, afterMs: 4800, totalMs: 5000))
+    }
+
+    /// A boundary earlier than the overlap must clamp to the start rather than index negatively.
+    func testABoundaryInsideTheOverlapClampsToTheStart() throws {
+        let samples = speech(ms: 4000)
+        let tail = try XCTUnwrap(Coordinator.tail(of: samples, afterMs: 500, totalMs: 4000))
+        XCTAssertEqual(tail.count, samples.count, "Clamped to zero, so the whole recording is passed.")
     }
 
     func testAGapTooShortToBeAWordIsNotWorthAPass() {
@@ -46,7 +73,8 @@ final class StreamTailTests: XCTestCase {
     /// contains speech, so it decides this too.
     func testASilentGapIsNotTranscribed() {
         let samples = speech(ms: 5000) + silence(ms: 2000)
-        XCTAssertNil(Coordinator.tail(of: samples, afterMs: 5000, totalMs: 7000))
+        XCTAssertNil(Coordinator.tail(of: samples, afterMs: 5000, totalMs: 7000),
+                     "The gap is silence. The overlap reaches back into the speech before it, so this only holds if the decision is made on the new audio alone.")
     }
 
     func testNothingLeftOverProducesNoPass() {

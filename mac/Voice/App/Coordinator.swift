@@ -424,16 +424,39 @@ final class Coordinator: ObservableObject {
     /// away from whatever the recorder is actually producing.
     static func tail(of samples: [Float], afterMs: Int, totalMs: Int) -> [Float]? {
         guard totalMs > 0, !samples.isEmpty, afterMs >= 0 else { return nil }
+        // The decision to run a pass at all is about the *real* gap, not the padded one — the
+        // overlap below must never make a 100 ms gap look like it is worth transcribing.
         guard totalMs - afterMs >= minimumTailMs else { return nil }
-        let start = Int((Double(afterMs) / Double(totalMs)) * Double(samples.count))
-        guard start >= 0, start < samples.count else { return nil }
-        let tail = Array(samples[start...])
-        guard EnergyGate.hasSpeech(tail) else { return nil }
-        return tail
+
+        func index(_ ms: Int) -> Int { Int((Double(ms) / Double(totalMs)) * Double(samples.count)) }
+
+        // Whether to run a pass is decided on the NEW audio alone. The overlap below deliberately
+        // reaches back into speech that has already been transcribed, so asking it about the
+        // padded slice would defeat the silence guard completely — every silent gap would look
+        // like speech because of the words in front of it.
+        let boundary = index(afterMs)
+        guard boundary >= 0, boundary < samples.count else { return nil }
+        guard EnergyGate.hasSpeech(Array(samples[boundary...])) else { return nil }
+
+        // What to transcribe starts earlier, so the word straddling the boundary is whole.
+        return Array(samples[index(max(0, afterMs - overlapMs))...])
     }
 
     /// Below this, a gap is a pause or a rounding error rather than a word.
     static let minimumTailMs = 400
+
+    /// How far *before* the boundary the final pass starts.
+    ///
+    /// Butt-joining the audio at the boundary loses whichever word straddles it: that word is cut
+    /// in half in the tail's audio, Whisper mangles or drops it, and `Stitch` trusts the tail over
+    /// the stream at the seam, so it is gone from both halves. A short unstressed word is exactly
+    /// what falls into that crack — this was reported as "it cut the word 'and'".
+    ///
+    /// Overlapping instead means the tail contains the boundary word whole, and gives `Stitch` real
+    /// overlapping text to find the seam in rather than hoping the two halves abut cleanly. The
+    /// duplication the overlap creates is the thing `Stitch` exists to remove, so it costs nothing
+    /// but a slightly longer pass.
+    static let overlapMs = 1500
 
 }
 
