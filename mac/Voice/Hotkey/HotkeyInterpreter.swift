@@ -13,6 +13,14 @@ struct HotkeyInterpreter {
     // deferred instead of orphaning the in-flight press.
     private(set) var isHeld = false
 
+    /// True for the duration of a hands-free session (prd-hands-free-dictation.md rule 6).
+    ///
+    /// During a hold, any other key can only be a shortcut — Fn+←, a chord — so cancelling is
+    /// right. Latched mode is the opposite situation: the whole point is that the user keeps
+    /// typing while it records, so the session must survive every keystroke. Esc is the single
+    /// exception, because "throw this away" has no other expression once the key is no longer held.
+    var latched = false
+
     init(choice: HotkeyChoice) { self.choice = choice }
 
     mutating func handle(_ e: KeyEvent) -> HotkeyAction? {
@@ -23,7 +31,12 @@ struct HotkeyInterpreter {
             if down && !isHeld { isHeld = true; return .press }
             if !down && isHeld { isHeld = false; return .release }
             return nil
-        case .keyDown:
+        case .keyDown(let code):
+            // Rule 6: a latched session ignores the keyboard entirely except for Esc. Note the key
+            // is *not* held during a latched session, so the `isHeld` guard below would already
+            // swallow every keyDown — this branch exists to let Esc back through, not to block the
+            // others.
+            if latched { return code == Self.escapeKeyCode ? .cancel : nil }
             // Any real key while the hotkey is held means a shortcut (Fn+F5, Fn+←, Esc): not a
             // dictation. H1: `isHeld` resets right here, not at the swallowed physical release —
             // `.cancel` is the last action this press produces; the flags(down: false) that follows

@@ -19,6 +19,10 @@ final class Coordinator: ObservableObject {
     // H2/H3: the model actually loaded (or being loaded) into `transcriber` — distinct from
     // `Preferences.modelId`/the Settings picker, which may point at a different, not-yet-loaded id.
     @Published private(set) var activeModelId = Preferences.modelId
+    /// True while a hands-free session is running. Drives the bar's indicator and the menu bar
+    /// icon; must be cleared by every route a session can end, or a stale indicator claims a
+    /// microphone is live when it is not.
+    @Published private(set) var isLatched = false
 
     private var machine = DictationMachine()
     private lazy var hotkey = HotkeyMonitor(choice: Preferences.hotkey)
@@ -29,6 +33,10 @@ final class Coordinator: ObservableObject {
     // Date that the next dictation with that id would overwrite — the map is bounded by the queue.
     private var pendingRelease: Date?
     private var releaseAt: [UUID: Date] = [:]
+    /// The double-tap gesture rules. Pure and clock-free; this owns the clock on its behalf, the
+    /// same way it owns the release→paste clock above.
+    private var tapLatch = TapLatch()
+    private var latchWindowWork: DispatchWorkItem?
     private let recorder = AudioRecorder()
     private let injector = TextInjector()
     private let panel = HUDPanel()
@@ -58,14 +66,10 @@ final class Coordinator: ObservableObject {
         activeModelId = Preferences.modelId
         refiner = RefineService(api: api, outbox: Outbox())
         recorder.onLevel = { [weak self] l in self?.levels.append(l); if self?.hud == .listening { self?.render() } }
-        recorder.onCapReached = { [weak self] in self?.send(.hotkeyUp) }
+        recorder.onCapReached = { [weak self] in self?.capReached() }
         hotkey.onAction = { [weak self] a in
             guard let self, !self.paused else { return }
-            switch a {
-            case .press: self.send(.hotkeyDown(FrontmostContext.current()))
-            case .release: self.send(.hotkeyUp)
-            case .cancel: self.send(.cancelRequested)
-            }
+            self.handleHotkey(a, at: Date())
         }
         try? recorder.prepare()
         _ = hotkey.start()
@@ -103,6 +107,82 @@ final class Coordinator: ObservableObject {
         }
     }
 
+    /// Turns a key action into machine events, via the gesture rules.
+    ///
+    /// `Date()` is read here and nowhere below: `TapLatch` and `DictationMachine` both stay pure,
+    /// which is what keeps their tests free of sleeps.
+    private func handleHotkey(_ action: HotkeyAction, at now: Date) {
+        for outcome in tapLatch.handle(action, at: now) { apply(outcome) }
+    }
+
+    private func apply(_ outcome: TapLatch.Outcome) {
+        switch outcome {
+        case .startDictation:
+            send(.hotkeyDown(FrontmostContext.current()))
+
+        case .holdOpen:
+            // The key came up too quickly to be a dictation. Keep recording — the reducer would
+            // have discarded this as too short anyway — and wait to see if a second tap arrives.
+            scheduleLatchWindow()
+
+        case .latch:
+            cancelLatchWindow()
+            isLatched = true
+            hotkey.setLatched(true)
+
+        case .endSession:
+            cancelLatchWindow()
+            clearLatch()
+            send(.hotkeyUp)
+
+        case .abandon:
+            cancelLatchWindow()
+            clearLatch()
+            // Cancel first, then show. `.cancelRequested` returns `.hud(.hidden)`, so showing the
+            // message first would have it wiped by the cancel in the same turn — the user would see
+            // nothing at all and a stray tap would look like the app ignoring them.
+            send(.cancelRequested)
+            showHUD(.message(Strings.tapTooShort))
+        }
+    }
+
+    private func scheduleLatchWindow() {
+        cancelLatchWindow()
+        // DispatchWorkItem rather than Timer, following showHUD's existing pattern: it must be
+        // cancellable the instant a second tap lands, or it would abandon a session that just
+        // started.
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            for outcome in self.tapLatch.windowExpired(at: Date()) { self.apply(outcome) }
+        }
+        latchWindowWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(TapLatch.windowMs) / 1000, execute: work)
+    }
+
+    private func cancelLatchWindow() {
+        latchWindowWork?.cancel()
+        latchWindowWork = nil
+    }
+
+    /// Every route a session can end funnels through here. Missing one leaves `isLatched` true over
+    /// a finished session, which is worse than never showing it: the indicator's whole job is to say
+    /// a microphone is open.
+    private func clearLatch() {
+        isLatched = false
+        hotkey.setLatched(false)
+    }
+
+    /// The 90 s ceiling. Reachable for the first time now — nobody holds a key for 90 seconds, but
+    /// a hands-free session left running gets there. It must read as a limit, not a crash.
+    private func capReached() {
+        cancelLatchWindow()
+        let wasLatched = isLatched
+        clearLatch()
+        tapLatch.reset()
+        send(.hotkeyUp)
+        if wasLatched { showHUD(.message(Strings.latchCapReached)) }
+    }
+
     func send(_ e: MachineEvent) {
         for effect in machine.handle(e) { perform(effect) }
     }
@@ -120,8 +200,13 @@ final class Coordinator: ObservableObject {
                 // from the app working right up until no text appears — and gives the user nothing
                 // to act on. Say so and end the dictation instead.
                 log.error("could not start recording: \(String(describing: error), privacy: .public)")
-                showHUD(.message(Strings.noMicrophone))
+                cancelLatchWindow()
+                clearLatch()
+                tapLatch.reset()
+                // Cancel before showing: `.cancelRequested` returns `.hud(.hidden)`, which would
+                // wipe the message if it were shown first.
                 send(.cancelRequested)
+                showHUD(.message(Strings.noMicrophone))
                 return
             }
             prewarmConnection()   // rule 19: strictly after the microphone is open

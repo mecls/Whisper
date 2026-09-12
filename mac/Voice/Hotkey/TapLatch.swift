@@ -120,6 +120,11 @@ struct TapLatch {
         }
     }
 
+    /// Forgets the current gesture. For endings that do not come through a key event at all — the
+    /// 90 s cap, a recorder that failed to start — where leaving the latch set would strand
+    /// `isLatched` true over a session that is already over.
+    mutating func reset() { state = .idle }
+
     /// Called by `Coordinator` when the window timer fires.
     mutating func windowExpired(at now: Date) -> [Outcome] {
         guard case .windowOpen(let releasedAt) = state,

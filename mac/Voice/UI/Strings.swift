@@ -16,6 +16,10 @@ enum Strings {
     static let tokenInvalid = "Token invalid — open Settings"
     static let secureField = "Secure field — text copied to clipboard instead"
     static let noMicrophone = "No microphone available — check System Settings › Sound › Input"
+    // Hands-free dictation
+    static let tapTooShort = "Too short — tap twice to dictate hands-free"
+    static let latched = "hands-free"
+    static let latchCapReached = "Reached the 90 s limit — transcribing"
     static let modelLoading = "Model loading"
     static let modelNotDownloaded = "Model not downloaded"
     static let copyLast = "Copy last dictation"

@@ -23,9 +23,18 @@ final class HotkeyMonitor {
     // D2: a no-op (beyond staging `pendingChoice`) while a press is in flight — applied in `handle`
     // once the interpreter reports `.release`/`.cancel` for the currently-held key.
     func setChoice(_ choice: HotkeyChoice) {
-        guard interpreter.isHeld else { interpreter = HotkeyInterpreter(choice: choice); return }
+        guard interpreter.isHeld else {
+            let wasLatched = interpreter.latched
+            interpreter = HotkeyInterpreter(choice: choice)
+            interpreter.latched = wasLatched   // a rebuilt interpreter must not silently un-latch
+            return
+        }
         pendingChoice = choice
     }
+
+    /// Rule 6: tells the interpreter that a hands-free session is running, so only Esc cancels.
+    /// The event mask is unchanged — keyDown must still be observed, or Esc would never arrive.
+    func setLatched(_ on: Bool) { interpreter.latched = on }
 
     @discardableResult
     func start() -> Bool { tap.start(mask: Self.idleMask) }

@@ -57,4 +57,32 @@ final class HotkeyInterpreterTests: XCTestCase {
         XCTAssertNil(i.handle(.flags(fn: false, rightOption: false, rightCommand: false)))
         XCTAssertFalse(i.isHeld)
     }
+
+    // MARK: - Latched mode (prd-hands-free-dictation.md rule 6)
+
+    func testALatchedSessionIgnoresOrdinaryKeystrokes() {
+        // The entire point of hands-free is that the user keeps typing. Before this, any keyDown
+        // during a dictation cancelled it, so a latched session would have died on the first
+        // keystroke — the one thing latched mode exists to allow.
+        var i = HotkeyInterpreter(choice: .fn)
+        i.latched = true
+        for code: UInt16 in [0, 1, 36, 49, 123] {   // a, s, return, space, left-arrow
+            XCTAssertNil(i.handle(.keyDown(code)), "keyCode \(code) must not cancel a latched session")
+        }
+    }
+
+    func testEscStillCancelsALatchedSession() {
+        // The single exception. Once the key is no longer held there is no other way to say
+        // "throw this away" — and a 30-second hands-free session is exactly when you want one.
+        var i = HotkeyInterpreter(choice: .fn)
+        i.latched = true
+        XCTAssertEqual(i.handle(.keyDown(HotkeyInterpreter.escapeKeyCode)), .cancel)
+    }
+
+    func testUnlatchedBehaviourIsUnchanged() {
+        // The hold path must be untouched: during a hold, any key is a shortcut and cancels.
+        var i = HotkeyInterpreter(choice: .fn)
+        XCTAssertEqual(i.handle(.flags(fn: true, rightOption: false, rightCommand: false)), .press)
+        XCTAssertEqual(i.handle(.keyDown(0)), .cancel)
+    }
 }
