@@ -304,7 +304,7 @@ LOG_TRANSCRIPTS=0               # refused in production
 - [ ] **Step 10: Commit**
 
 ```bash
-cd /Users/miguelcarvalhal/Documents/Projects/MirasideAI/hub/miraside-voice
+cd /Users/miguelcarvalhal/Documents/Projects/SintraLabs/apps/voice
 git add .gitignore docs server/package.json server/package-lock.json server/tsconfig.json server/.env.example server/src server/test
 git commit -m "feat(server): scaffold Fastify app with typed env and /health"
 ```
