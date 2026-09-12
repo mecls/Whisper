@@ -58,8 +58,8 @@ struct VoiceApp: App {
         // Declared before onboarding so it is the app's main window. `defaultLaunchBehavior` is
         // explicit on both: now that Voice is `.regular`, a Window scene can present itself at
         // launch, and the one that does must be Insights and never the onboarding sheet.
-        Window(Strings.insightsTitle, id: "insights") {
-            InsightsView(model: Coordinator.shared.insights)
+        Window(Strings.appName, id: "insights") {
+            MainWindow(coordinator: Coordinator.shared, sync: Coordinator.shared.sync)
                 .onAppear {
                     // The only place `openWindow` exists is inside a view. Hand it to the router so
                     // AppDelegate can reopen this window from a dock click, long after this view

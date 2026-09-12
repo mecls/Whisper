@@ -22,6 +22,7 @@ enum Strings {
     static let latchCapReached = "Reached the 90 s limit — transcribing"
     static let showBar = "Show bar"
     static let liveTranscription = "Live transcription (experimental)"
+    static let liveTranscriptionNote = "Transcribes while you speak, so the text is ready the moment you stop — removing the transcription wait from every dictation. Chunked transcription can be slightly less accurate than a single pass; turn it off if you notice mistakes."
     static let modelLoading = "Model loading"
     static let modelNotDownloaded = "Model not downloaded"
     static let copyLast = "Copy last dictation"

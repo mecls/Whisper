@@ -29,6 +29,8 @@ struct SettingsView: View {
 struct GeneralTab: View {
     @ObservedObject var coordinator: Coordinator
     @ObservedObject var sync: SyncService
+    @AppStorage(Preferences.Key.showBar) private var showBar = true
+    @AppStorage(Preferences.Key.liveTranscription) private var liveTranscription = false
     // D1: Preferences is a static namespace — views bind with @AppStorage, not @ObservedObject.
     @AppStorage(Preferences.Key.hotkey) private var hotkeyRaw = HotkeyChoice.fn.rawValue
     @AppStorage(Preferences.Key.sounds) private var sounds = true
@@ -55,6 +57,12 @@ struct GeneralTab: View {
             }
             Toggle(Strings.playSounds, isOn: $sounds)
             Toggle(Strings.showTextInHUDToggle, isOn: $showTextInHUD)
+            Toggle(Strings.showBar, isOn: $showBar)
+                .onChange(of: showBar) { _, _ in coordinator.refreshBarVisibility() }
+            Toggle(Strings.liveTranscription, isOn: $liveTranscription)
+            Text(Strings.liveTranscriptionNote)
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Toggle(Strings.launchAtLogin, isOn: $launchAtLogin).onChange(of: launchAtLogin) { _, on in
                 do {
                     if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
