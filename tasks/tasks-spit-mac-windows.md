@@ -3,6 +3,22 @@
 Source spec: `tasks/prd-spit-mac-windows.md`. Rule numbers below (R1–R46) and spike numbers (S1–S5)
 refer to it.
 
+## Status (2026-09-13)
+
+**Done and verified without a person:** tasks 0–7. Branch `spit-mac-windows`, pull request #1 open against `main`,
+CI green on its head commit. Mac: `Spit.dmg` passes all 16 `verify-dmg.sh` checks; 143 Mac tests. Windows: 213 core
+tests (108 ported by name), Windows-only tests including a whole-UI walk and a real paste into Notepad, a smoke test
+with the shipped model (Whisper small, 12.9 s for the 12.5 s fixture on a GPU-less runner), and silent install → run →
+single instance → uninstall on a GitHub Windows runner. Five code reviews; every confirmed finding fixed (build spec §16).
+
+**Missing — needs Miguel or a real PC:**
+- Spikes S1–S5 on the PC (1.3–1.7): no real key press, microphone or GPU has touched the Windows app.
+- `release-windows.yml` (6.6) has never run: it runs only on a tag push.
+- Release 0.2.0 (8.1–8.4): tag, `package.sh --release`, both manual checklists against the draft, SmartScreen
+  screenshots for the `/spit` placeholder, latency SQL, publish, deploy `site/`.
+- Follow-ups found during the build (9.x): the live-transcription fallback, Mac equivalents of three Windows fixes,
+  and open question 6.
+
 ## Relevant Files
 
 ### Mac (existing)
@@ -47,7 +63,7 @@ refer to it.
   the Mac (R23).
 - `windows/Spit.App/` — **new**, `net10.0-windows`, WPF. Hook, audio, clipboard, Whisper.net, tray,
   windows, installer entry point (R24–R44).
-- `.github/workflows/release-windows.yml` — **new**; there is no `.github/` in the repo today (R10).
+- `.github/workflows/windows-ci.yml`, `.github/workflows/release-windows.yml` — **new** (R10).
 
 ### Server, docs and site
 
@@ -56,15 +72,14 @@ refer to it.
 - `server/src/routes/schemas.ts` — length limits the Windows `context` and `asrModel` must fit (R45).
   Read-only.
 - `docs/API.md` — line 48 documents `Settings`; gains the note that `hotkey` is Mac-only (R46).
-- `README.md` — line 40 still says "137 Mac unit tests" (143 now); "Install for teammates" (line 42)
-  gains a pointer to `/spit`.
+- `README.md` — status and what is missing, test counts, the DMG and Windows commands, and the pointer to `/spit`.
 - `../../site/spit/index.html` — **new.** The download page. `site/` sits at
   `SintraLabs/site`, **outside this git repository**, and is not under git at all (R17–R19).
 - `../../site/styles.css` — tokens and layout classes the page reuses (R17).
 
 ### Notes
 
-- **Branch:** work is currently on `main`, so task 0.0 creates a feature branch.
+- **Branch:** `spit-mac-windows`, open as pull request #1 against `main`.
 - **Mac tests** live in `mac/VoiceTests/`, one `<Type>Tests.swift` per type, and run with
   `cd mac && xcodebuild test -scheme Voice` (143 tests, 1 skipped, as of 2026-09-12).
 - **Server tests** live in `server/test/*.test.ts` and run with `cd server && npm test`. This spec
@@ -103,8 +118,8 @@ only trust the boxes if they were ticked as the work happened.
         compiles here with `-p:EnableWindowsTargeting=true` (it does: XAML compiles to BAML)
   - [x] 1.2 Read the pinned model SHA-256s from Hugging Face and record them in Notes above
   - [ ] 1.3 **(PC)** S1: transcribe `mac/Fixtures/en.wav` and `pt-synthetic.wav` with the CPU and
-        Vulkan runtimes and both models; write the one-pass milliseconds into spec §5. CI records a
-        CPU-only number for the q5_0 model on `windows-latest` in the meantime (6.4)
+        Vulkan runtimes and both models; write the one-pass milliseconds into spec §5. Meanwhile CI
+        measured a GPU-less runner: large-v3-turbo q5_0 53–85 s, small q8_0 12.9 s for the 12.5 s clip (docs/SPIKES.md)
   - [ ] 1.4 **(PC)** S2: log which process sends the first `WM_RENDERFORMAT` with Clipboard History on,
         in Notepad, Chrome and Word. Until it passes, keep R32's 1.5 s restore (the default built here)
   - [ ] 1.5 **(PC)** S3: check `ElevationProbe` (4.6) against Notepad run as administrator and normal
@@ -165,7 +180,7 @@ only trust the boxes if they were ticked as the work happened.
   - [x] 3.11 Add `windows/scripts/parity-check.sh`: for each of the 14 files, the Swift `func test`
         count equals the C# `[Fact]` count in the same-named class, and the names match; run it
   - [x] 3.12 `dotnet test windows/Spit.Core.Tests` passes on the Mac
-- [ ] 4.0 `Spit.App` platform layer
+- [x] 4.0 `Spit.App` platform layer
   - [x] 4.1 Create `windows/Spit.App/Spit.App.csproj` (`net10.0-windows`, `UseWPF`, `win-x64`,
         `AssemblyName` `Spit`, `ApplicationManifest` asInvoker) with the R24 packages, a hand-written
         `Program.Main` whose first line is `VelopackApp.Build().Run()`, and `App.xaml` as Page (R44)
@@ -180,22 +195,22 @@ only trust the boxes if they were ticked as the work happened.
         `OpenClipboard` retry 10 ms up to 200 ms with Spit's HWND, text with
         `ExcludeClipboardContentFromMonitorProcessing`, Ctrl+V via `SendInput` 30 ms later, restore at
         1.5 s (R25, R32, R33)
-  - [x] 4.6 `Platform/ElevationProbe.cs` and `Inject/ForegroundContext.cs`: elevation via
-        `OpenProcessToken`/`TokenElevation` with access-denied = elevated; exe name + `FileDescription`,
+  - [x] 4.6 `Platform/ElevationProbe.cs` and `Inject/ForegroundContext.cs`: input counts as
+        blocked when the target's integrity level is above Spit's (access denied = blocked); exe name + `FileDescription`,
         UWP child-window resolution, never the title (R30, R31)
-  - [x] 4.7 `Asr/ModelManager.cs`: download to `.partial`, verify pinned SHA-256, rename; progress;
+  - [x] 4.7 `Spit.Core/Asr/ModelCatalog.cs` + `ModelDownloader.cs` (default `ggml-small-q8_0.bin`): download to `.partial`, verify pinned SHA-256, rename; progress;
         storage under `%LOCALAPPDATA%\Miraside\Spit\models` (R5, R41)
   - [x] 4.8 `Asr/WhisperTranscriber.cs`: Whisper.net factory, temperature 0, language hint, prompt from
         dictionary terms with one retry without it, 1 s silence warm-up, one inference at a time behind a
         `SemaphoreSlim`, `asrModel = whisper.cpp/<file>` (R22, R41, R42)
-  - [x] 4.9 `Asr/StreamingTranscriber.cs`: the 100 ms poll / > 1 s new audio / all-but-last-2 loop over
+  - [x] 4.9 `Spit.Core/Asr/StreamingSession.cs` + `Spit.App/Asr/LiveTranscription.cs`: the 100 ms poll / > 1 s new audio / all-but-last-2 loop over
         `StreamingPolicy`, finishing any pass before the tail pass (R22, R42)
   - [x] 4.10 `Storage/TokenStore.cs` (Credential Manager, target `co.miraside.voice:<server URL>`,
         `CRED_PERSIST_LOCAL_MACHINE`), `Storage/Settings.cs` (`settings.json`), `Storage/DictionaryCache.cs`,
         `Storage/AppPaths.cs`, `Storage/LaunchAtLogin.cs` (HKCU Run) (R5, R44)
   - [x] 4.11 `App/Coordinator.cs`: wires hotkey → capture → gate → transcribe → refine → paste → report
         exactly like `Coordinator.swift`, with the 1.2 s return-to-idle and 60 s pre-warm
-- [ ] 5.0 `Spit.App` user interface
+- [x] 5.0 `Spit.App` user interface
   - [x] 5.1 `UI/TrayIcon.cs`: H.NotifyIcon with the four `menuIcon` states and the R37 menu order
   - [x] 5.2 `UI/BarWindow.xaml`: `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`, `ShowActivated=false`, sized to
         content, positioned by the R38 rule, lozenge / 20-bar waveform / red latched / status text
@@ -219,14 +234,15 @@ only trust the boxes if they were ticked as the work happened.
   - [x] 6.3 `windows/Spit.App.Tests` (Windows-only, run in CI): clipboard snapshot round-trip,
         own-process elevation probe, `ForegroundContext` for a spawned Notepad, credential write/read/delete
         under a test target, launch-at-login registry round-trip under a test value name
-  - [x] 6.4 CI model job: cache the q5_0 model by SHA-256, run `Spit.exe --smoke-test mac/Fixtures/en.wav`,
+  - [x] 6.4 CI model job: cache the default model (`ggml-small-q8_0.bin`) by SHA-256, run `Spit.exe --smoke-test mac/Fixtures/en.wav`,
         assert non-empty text and record the milliseconds in the job summary
   - [x] 6.5 CI install job: `Spit-Setup.exe --silent`, check `%LocalAppData%\Spit\Spit.exe` exists, start
         it, confirm the process is alive after 15 s and a second launch exits, then uninstall and confirm
         `%LOCALAPPDATA%\Miraside\Spit\` remains
   - [ ] 6.6 `.github/workflows/release-windows.yml` on `v*` tags: tag == `VERSION`, `dotnet test`, pack,
-        `gh release create --draft` if absent, upload `Spit-Setup.exe` only (R8–R11)
-- [ ] 7.0 Docs and the `/spit` page
+        `gh release create --draft` if absent, upload `Spit-Setup.exe` only (R8–R11). Written and reviewed; it
+        runs only on a tag push, so 8.1 is its first real run
+- [x] 7.0 Docs and the `/spit` page
   - [x] 7.1 `docs/API.md`: note under `Settings` that `hotkey` is Mac-only and other clients echo it (R46)
   - [x] 7.2 `README.md`: test counts (143 Mac, the new Windows count), a "Windows" section with the
         build and test commands, and "Install" pointing at `/spit`
@@ -240,3 +256,11 @@ only trust the boxes if they were ticked as the work happened.
         taking screenshots of every Windows warning; fill 7.3's marked block from them
   - [ ] 8.3 **(PC)** Run the §5 latency SQL after 20 dictations and record p50/p90
   - [ ] 8.4 **(PC)** Publish the release; `curl -sIL` both `latest/download` URLs; put `/spit` live
+- [ ] 9.0 Follow-ups found during the build (none blocks the release)
+  - [ ] 9.1 Live transcription on Windows fell back to a whole-recording pass on the CI clip (correct text, 37 s
+        instead of 12.9 s). Log the streamed and tail texts from real dictations, then tune
+        `Stitch.TryJoinAllowingTailSkip` / `StreamTail.OverlapMs`. Live transcription is off by default
+  - [ ] 9.2 Decide whether to port three Windows fixes to the Mac, which has the same patterns: appending a tail
+        when no seam is found (duplicated words), a live stream left running after a rejected dictation, and a
+        double-tap latching while the model loads (build spec §16)
+  - [ ] 9.3 Open question 6: a spending ceiling for friends' cleanup on the Ollama key

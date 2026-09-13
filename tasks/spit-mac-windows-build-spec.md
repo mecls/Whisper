@@ -378,13 +378,13 @@ per device (R20); there is no sign-up UI.
 
 ## 15. Deliverables
 
-- [ ] `mac/scripts/package.sh` + `verify-dmg.sh`, `VERSION`, `project.yml` changes; a locally verified
+- [x] `mac/scripts/package.sh` + `verify-dmg.sh`, `VERSION`, `project.yml` changes; a locally verified
       `mac/build/Spit.dmg` (not committed)
-- [ ] `windows/` solution: `Spit.Core`, `Spit.Core.Tests`, `Spit.App`, `Spit.App.Tests`, scripts
-- [ ] `.github/workflows/windows-ci.yml` (green on the PR) and `release-windows.yml`
-- [ ] `docs/API.md` note; `README.md` Windows section and counts
-- [ ] `../../site/spit/index.html` (outside git)
-- [ ] Task list ticked; Decisions Log filled; a PR from `spit-mac-windows` to `main` whose description
+- [x] `windows/` solution: `Spit.Core`, `Spit.Core.Tests`, `Spit.App`, `Spit.App.Tests`, scripts
+- [x] `.github/workflows/windows-ci.yml` (green on the PR) and `release-windows.yml`
+- [x] `docs/API.md` note; `README.md` Windows section and counts
+- [x] `../../site/spit/index.html` (outside git)
+- [x] Task list ticked; Decisions Log filled; a PR from `spit-mac-windows` to `main` whose description
       lists every (PC) item still open
 
 ## 16. Decisions log
@@ -549,6 +549,10 @@ build because §2 excluded it.
   (`Stitch.TryJoinAllowingTailSkip`; `Stitch.Join`/`TryJoin` stay identical to the Mac), and a tail whose overlap audio is
   silence is appended as new speech (`StreamTail.OverlapHasSpeech`). The smoke report records `wholePassFallback` and CI
   shows it; the Notepad test times the restore itself (≥ ceiling − 50 ms) instead of reading the clipboard inside it.
+- **Measured with Whisper small (CI run 34774293255):** 12,881 ms (Vulkan build, CPU device) and 12,896 ms (CPU) for the
+  12,522 ms fixture — against 53–85 s for large-v3-turbo — with text "Hi Joe, quick update. The MiraSite dashboard is
+  running on Convex now, and the Olomac he lives on the VPS…". The live path fell back to a whole-recording pass
+  (`wholePassFallback: true`, ~37 s): correct text, lost latency; logged as follow-up 9.1.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 
@@ -557,3 +561,12 @@ build because §2 excluded it.
 > AC-1 to AC-7 pass — AC-1/AC-2 via `mac/scripts/package.sh` on this Mac, AC-3 to AC-5 and AC-7 via
 > `dotnet test` + `parity-check.sh`, AC-6 as a green `windows-ci.yml` run on the PR's head commit —
 > and the PR to `main` is open with every (PC) item listed as outstanding.
+
+### Status at hand-off (2026-09-13)
+
+- **AC-1, AC-2:** pass on this Mac (`package.sh`: 16/16 checks; `--release` without an identity exits 1).
+- **AC-3, AC-4, AC-5, AC-7:** pass (`dotnet test`: 213; `parity-check.sh`: 108 = 108).
+- **AC-6:** passes on CI for pull request #1's head commit (tests, pack, smoke test with the shipped model, install →
+  run → single instance → uninstall).
+- **Not provable here:** anything needing a real key press, microphone, GPU, elevated window or a person — spikes
+  S1–S5, both manual checklists, the release (task 8.x). `release-windows.yml` has never run.

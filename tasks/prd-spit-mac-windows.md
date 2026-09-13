@@ -571,6 +571,13 @@ page's copy.
 14. Sleep and wake the PC, then lock and unlock: the hotkey still works (rule 29).
 15. Uninstall from Settings › Apps removes the program and leaves `%LOCALAPPDATA%\Miraside\Spit\`.
 
+### Interim measurements (CI, 2026-09-13)
+
+S1 cannot run without the PC; GitHub's `windows-latest` runner (4 vCPU, no GPU) gave a first reading on
+`mac/Fixtures/en.wav` (12,522 ms): large-v3-turbo q5_0 took 53–85 s (Vulkan and CPU runtimes identical, since Vulkan
+found no GPU); Whisper small q8_0 took 12.9 s. On that basis Whisper small became the Windows default (rule 41). Full
+readings are in `docs/SPIKES.md`.
+
 ### Numbers
 
 After 20 dictations of 10–12 s on the PC, with live transcription off:
