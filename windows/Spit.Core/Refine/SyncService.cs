@@ -24,6 +24,9 @@ public sealed class SyncService : IDisposable
     /// successful sync, which is what gates the PUT.
     private ServerSettings? _last;
 
+    /// Bumped by `SignOut`, so a `/v1/me` already in flight when the user signed out cannot put their name back.
+    private int _signOuts;
+
     public SyncService(IVoiceApiClient api, ILocalSettings settings, TimeProvider? timeProvider = null)
     {
         _api = api;
@@ -50,11 +53,14 @@ public sealed class SyncService : IDisposable
 
     public async Task SyncAsync()
     {
+        int signOuts;
+        lock (_gate) signOuts = _signOuts;
         try
         {
             var me = await _api.MeAsync().ConfigureAwait(false);
             lock (_gate)
             {
+                if (signOuts != _signOuts) return;
                 UserName = me.User.Name;
                 Unauthorized = false;
                 _last = me.Settings;
@@ -67,7 +73,11 @@ public sealed class SyncService : IDisposable
         }
         catch (ApiException e) when (e.Kind == ApiErrorKind.Unauthorized)
         {
-            lock (_gate) Unauthorized = true;
+            lock (_gate)
+            {
+                if (signOuts != _signOuts) return;
+                Unauthorized = true;
+            }
             Changed?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception)
@@ -113,6 +123,7 @@ public sealed class SyncService : IDisposable
     {
         lock (_gate)
         {
+            _signOuts++;
             Unauthorized = true;
             UserName = null;
         }

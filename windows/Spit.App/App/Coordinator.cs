@@ -83,6 +83,7 @@ public sealed class Coordinator : IDisposable
     private readonly Dictionary<Guid, int> targetProcess = [];
     private int? pendingTargetProcess;
     private string? startFailure;
+    private static readonly TimeSpan ReloadPollInterval = TimeSpan.FromMilliseconds(200);
     /// Set by `.transcribe`; read straight after the `.audioStopped` a stop sends, to tell a stop that became a
     /// transcription from one the reducer rejected.
     private bool transcribeRequested;
@@ -656,13 +657,14 @@ public sealed class Coordinator : IDisposable
                 // own, over the leftover audio only, stitched at a seam found in the text.
                 var text = streamed.Text;
                 var asrMs = 0;
-                if (StreamTail.Tail(samples, streamed.CoveredMs, audioMs) is { } tail)
+                var covered = StreamTail.EffectiveCoveredMs(streamed.Text, streamed.CoveredMs);
+                if (StreamTail.Tail(samples, covered, audioMs) is { } tail)
                 {
-                    Log.Info(Category, $"transcribing stream tail: {audioMs - streamed.CoveredMs} ms of {audioMs} ms");
+                    Log.Info(Category, $"transcribing stream tail: {audioMs - covered} ms of {audioMs} ms");
                     try
                     {
                         var t = await Task.Run(() => current.TranscribeAsync(tail, hint, progress: null));
-                        text = StreamTail.Combine(text, streamed.CoveredMs, t.Text);
+                        text = StreamTail.Combine(text, covered, t.Text);
                         asrMs = t.DurationMs;
                     }
                     catch (Exception e)
@@ -888,6 +890,14 @@ public sealed class Coordinator : IDisposable
     private async Task LoadSelectedModelAsync(bool reload)
     {
         if (disposed) return;
+        // Unloading the model under a dictation in flight disposes the instance its stream and tail use, and the
+        // dictation ends as "Nothing heard". Wait for it; the machine is not asked anything until then.
+        if (reload && (capture.IsCapturing || machine.Queue.Count > 0))
+        {
+            Log.Info(Category, "model change waits for the dictation in flight");
+            while (!disposed && (capture.IsCapturing || machine.Queue.Count > 0)) await Task.Delay(ReloadPollInterval);
+            if (disposed) return;
+        }
         var file = store.Current.ModelFile;
         // H2/H3: the model being loaded, which the Model page keeps from being deleted.
         model.ActiveModelLabel = AppModel.LabelFor(file);
@@ -1076,19 +1086,23 @@ public sealed class Coordinator : IDisposable
     {
         model.Unauthorized = sync.Unauthorized;
         model.UserName = sync.UserName;
+        // Build spec §4: the tray's status line says what is wrong, not "Ready", while the token is refused.
+        model.StatusLine = sync.Unauthorized ? Strings.TokenInvalid : Strings.IdleFor(model.Hotkey.Label());
     }
 
     /// Only Save and Sign out write the credential (rule 44).
     private async Task SaveTokenAsync(string token)
     {
-        tokens.Save(serverUrl, token);
+        // The URL in Settings now, as the Mac saves under `Preferences.serverURL`: after a URL change the token
+        // must be where the relaunched app will look for it.
+        tokens.Save(store.Current.ServerURL, token);
         model.HasToken = true;
         await RunSyncAsync();
     }
 
     private Task SignOutAsync()
     {
-        tokens.Delete(serverUrl);
+        tokens.Delete(store.Current.ServerURL);
         sync.SignOut();
         model.HasToken = false;
         PublishSync();

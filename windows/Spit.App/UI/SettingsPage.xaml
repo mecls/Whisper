@@ -95,7 +95,7 @@
 
                 <!-- Dictionary -->
                 <StackPanel x:Name="DictionaryPanel" Visibility="Collapsed">
-                    <Border Style="{DynamicResource Spit.CardBorder}" Padding="12,8" Margin="0,0,0,16">
+                    <Border Style="{DynamicResource Spit.CardStyle}" Padding="12,8" Margin="0,0,0,16">
                         <StackPanel>
                             <ProgressBar x:Name="DictionaryLoading" IsIndeterminate="True" Margin="0,8" Visibility="Collapsed" />
                             <TextBlock x:Name="DictionaryEmptyText" Style="{DynamicResource Spit.Caption}" Margin="0,6"

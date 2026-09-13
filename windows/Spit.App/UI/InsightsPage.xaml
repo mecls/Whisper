@@ -60,28 +60,28 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" Grid.Column="0" Style="{DynamicResource Spit.CardBorder}" MinHeight="190">
+                <Border Grid.Row="0" Grid.Column="0" Style="{DynamicResource Spit.CardStyle}" MinHeight="190">
                     <StackPanel>
                         <TextBlock Style="{DynamicResource Spit.CardTitle}" Text="{x:Static core:Strings.CardTotalWords}" />
                         <StackPanel x:Name="TotalWordsBody" Margin="0,14,0,0" />
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="0" Grid.Column="2" Style="{DynamicResource Spit.CardBorder}" MinHeight="190">
+                <Border Grid.Row="0" Grid.Column="2" Style="{DynamicResource Spit.CardStyle}" MinHeight="190">
                     <StackPanel>
                         <TextBlock Style="{DynamicResource Spit.CardTitle}" Text="{x:Static core:Strings.CardWpm}" />
                         <StackPanel x:Name="WpmBody" Margin="0,14,0,0" />
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="2" Grid.Column="0" Style="{DynamicResource Spit.CardBorder}" MinHeight="190">
+                <Border Grid.Row="2" Grid.Column="0" Style="{DynamicResource Spit.CardStyle}" MinHeight="190">
                     <StackPanel>
                         <TextBlock Style="{DynamicResource Spit.CardTitle}" Text="{x:Static core:Strings.CardStreak}" />
                         <StackPanel x:Name="StreakBody" Margin="0,14,0,0" />
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="2" Grid.Column="2" Style="{DynamicResource Spit.CardBorder}" MinHeight="190">
+                <Border Grid.Row="2" Grid.Column="2" Style="{DynamicResource Spit.CardStyle}" MinHeight="190">
                     <StackPanel>
                         <TextBlock Style="{DynamicResource Spit.CardTitle}" Text="{x:Static core:Strings.CardApps}" />
                         <StackPanel x:Name="AppsBody" Margin="0,14,0,0" />

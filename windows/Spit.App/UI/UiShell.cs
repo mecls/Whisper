@@ -72,7 +72,11 @@ public sealed class UiShell : IDisposable
 
         // Like the Mac's AppDelegate: the set-up window opens by itself only until it has been completed once.
         if (!settings.Current.Onboarded) ShowSetup();
+        // CI's install check requires this line: a UI that failed to build leaves a running process with no tray.
+        Log.Info("ui", UiReadyMessage);
     }
+
+    public const string UiReadyMessage = "tray, bar and windows ready";
 
     /// Shows the main window where it was (the tray's left-click, a second launch).
     public void ShowMain() => main?.ShowSection();

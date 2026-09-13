@@ -88,7 +88,7 @@
         <Setter Property="Foreground" Value="{DynamicResource Spit.Text}" />
     </Style>
 
-    <Style x:Key="Spit.CardBorder" TargetType="Border">
+    <Style x:Key="Spit.CardStyle" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource Spit.Card}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Spit.CardBorder}" />
         <Setter Property="BorderThickness" Value="1" />

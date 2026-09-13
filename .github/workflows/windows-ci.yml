@@ -112,14 +112,24 @@ jobs:
             $r = Get-Content $report -Raw | ConvertFrom-Json
             "| $runtime | $($r.runtime) | $($r.audioMs) | $($r.transcribeMs) | $($r.streamMs) | $($r.text) | $($r.streamedText) |" >> $env:GITHUB_STEP_SUMMARY
             if ($p.ExitCode -ne 0 -or -not $r.ok) { $failures += "${runtime}: $($r.error)"; continue }
-            if ([string]::IsNullOrWhiteSpace($r.streamedText)) { $failures += "${runtime}: the live path produced no text" }
-            # A word the stream heard must not be pasted twice (the "Hi Joel Hi Joel" seam).
-            $words = @($r.streamedText -split '\s+' | Where-Object { $_ })
-            for ($i = 1; $i -lt [Math]::Min($words.Count, 6); $i += 1) {
-              $a = ($words[0..($i - 1)] -join ' ').ToLowerInvariant().Trim(',.')
-              $b = ($words[$i..([Math]::Min($words.Count, 2 * $i) - 1)] -join ' ').ToLowerInvariant().Trim(',.')
-              if ($i -ge 2 -and $a -eq $b) { $failures += "${runtime}: live text repeats its opening words ('$a')" }
+            if ([string]::IsNullOrWhiteSpace($r.streamedText)) { $failures += "${runtime}: the live path produced no text"; continue }
+            # The live path must say what the one pass said: the same opening, no word pasted twice, about the same
+            # length, the fixture's words. Normalised like Stitch (letters and digits), so punctuation cannot hide a
+            # repeat — an earlier check trimmed only the ends and passed "Hi Joel, Joel, …".
+            $norm = { param($t) @(($t.ToLowerInvariant() -replace '[^\p{L}\p{N}\s]', '') -split '\s+' | Where-Object { $_ }) }
+            $once = & $norm $r.text
+            $live = & $norm $r.streamedText
+            $pairs = @{}
+            for ($k = 0; $k + 1 -lt $once.Count; $k++) { if ($once[$k] -eq $once[$k + 1]) { $pairs[$once[$k]] = $true } }
+            for ($k = 0; $k + 1 -lt $live.Count; $k++) {
+              if ($live[$k] -eq $live[$k + 1] -and -not $pairs.ContainsKey($live[$k])) { $failures += "${runtime}: live text repeats '$($live[$k])'" }
             }
+            $n = [Math]::Min(3, $once.Count)
+            $liveOpening = ($live | Select-Object -First $n) -join ' '
+            $onceOpening = ($once | Select-Object -First $n) -join ' '
+            if ($liveOpening -ne $onceOpening) { $failures += "${runtime}: live text opens '$liveOpening', one pass '$onceOpening'" }
+            if ($live.Count -gt $once.Count + 3) { $failures += "${runtime}: live text has $($live.Count) words, one pass $($once.Count)" }
+            if ($r.streamedText -notmatch 'mira|convex|olama') { $failures += "${runtime}: live text lacks the fixture's words" }
           }
           if ($failures.Count -gt 0) { throw ($failures -join '; ') }
 
@@ -151,6 +161,12 @@ jobs:
           $app.Refresh()
           if ($app.HasExited) { throw "Spit exited after start with code $($app.ExitCode)" }
           if (-not (Test-Path $data)) { throw "$data was not created by the running app" }
+          # Alive is not enough: a UI that fails to build leaves a process with a hotkey and no tray, bar or windows.
+          $logFile = Get-ChildItem (Join-Path $data 'logs') -Filter *.log -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+          if (-not $logFile) { throw 'the running app wrote no log' }
+          $logText = Get-Content $logFile.FullName -Raw
+          if ($logText -match ' fatal \[') { '--- app log ---'; $logText; throw 'the app logged a crash' }
+          if ($logText -notmatch 'tray, bar and windows ready') { '--- app log ---'; $logText; throw 'the UI did not finish starting' }
 
           $second = Start-Process -FilePath $exe -PassThru
           if (-not $second.WaitForExit(10000)) { throw 'a second Spit did not exit within 10 s (single instance broken)' }
@@ -166,8 +182,9 @@ jobs:
           "Spit processes after launcher: $($running.Count)"
           if ($running.Count -ne 1) { throw "expected one Spit process, found $($running.Count)" }
 
-          $log = Get-ChildItem (Join-Path $data 'logs') -Filter *.log -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($log) { '--- app log ---'; Get-Content $log.FullName -Tail 40 }
+          '--- app log ---'
+          Get-Content $logFile.FullName
+          if ((Get-Content $logFile.FullName -Raw) -match ' fatal \[') { throw 'the app logged a crash during the instance checks' }
 
           Get-Process Spit -ErrorAction SilentlyContinue | Stop-Process -Force
           Start-Sleep 2

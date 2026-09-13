@@ -21,7 +21,7 @@ public static class Stitch
     /// when the tail is a few words. Capped by the tail's own length.
     private const int AnchorWords = 5;
     /// Below this a match is coincidence, and a false seam deletes every word between it and the real one.
-    private const int MinimumAnchor = 3;
+    internal const int MinimumAnchor = 3;
 
     public static string Join(string streamed, string tail)
     {

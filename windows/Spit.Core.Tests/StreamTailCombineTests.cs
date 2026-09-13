@@ -35,6 +35,39 @@ public sealed class StreamTailCombineTests
         Assert.Equal("Hi Joel", StreamTail.Combine(" Hi Joel ", coveredMs: 900, "  "));
     }
 
+    [Theory]
+    [InlineData(1501)]
+    [InlineData(1600)]
+    [InlineData(2400)]
+    [InlineData(9000)]
+    public void AStreamTooShortToStitchCountsAsCoveringNothing(int coveredMs)
+    {
+        // The third review's cases: two streamed words past the overlap used to stitch by appending.
+        var covered = StreamTail.EffectiveCoveredMs("Hi Joel,", coveredMs);
+        var text = StreamTail.Combine("Hi Joel,", covered, "Hi Joel, quick update.");
+
+        Assert.Equal(0, covered);
+        Assert.Equal("Hi Joel, quick update.", text);
+    }
+
+    [Fact]
+    public void AStreamLongEnoughToStitchKeepsItsCoverage()
+    {
+        Assert.Equal(2400, StreamTail.EffectiveCoveredMs("we should ship it", 2400));
+    }
+
+    [Fact]
+    public void ACoveredNothingTailIsTheWholeRecording()
+    {
+        var samples = new float[16_000 * 3];
+        for (var i = 0; i < samples.Length; i++) samples[i] = (float)(0.3 * Math.Sin(i * 0.05));
+
+        var tail = StreamTail.Tail(samples, StreamTail.EffectiveCoveredMs("Hi Joel,", 2400), 3000);
+
+        Assert.NotNull(tail);
+        Assert.Equal(samples.Length, tail.Length);
+    }
+
     [Fact]
     public void ReplacingNeverDuplicatesTheOpeningWords()
     {

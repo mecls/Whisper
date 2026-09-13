@@ -511,6 +511,16 @@ build because §2 excluded it.
   155–158 s. Both texts correct and identical ("Hi Joel, quick update. The MiraSite dashboard is running on Convex now,
   and the Olamaki lives on the VPS…"). ~6.8× slower than real time on a 4-vCPU runner is open question 3 (Miguel, after
   S1 on a real PC), not a defect in the build.
+- A third review found, and this build fixes: (1) **`Spit.CardBorder` was both a brush and a Style in `Theme.xaml`** —
+  WPF throws on the duplicate key, so `UiShell.Start` would have failed before creating the tray, bar or windows while
+  CI stayed green (it only checked the process was alive); the Style is now `Spit.CardStyle`, `UiShell` logs
+  "tray, bar and windows ready", CI fails without that line or with any `fatal` log line, and a Windows-only test builds
+  the whole UI shell. (2) `StreamTail.EffectiveCoveredMs`: a stream of fewer than 3 words counts as covering nothing
+  whatever its duration (1–2 streamed words past 1.5 s still duplicated). (3) CI's live-text check compares normalised
+  words with the one pass. (4) Save/Sign out use the server URL in Settings, as the Mac does. (5) A model change waits for
+  the dictation in flight instead of disposing its transcriber. (6) `SHA256SUMS.txt` has one format whichever side
+  uploads last. (7) The tray status line says "Token invalid — open Settings" while the token is refused, and a sync in
+  flight at Sign out no longer restores the name.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

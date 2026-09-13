@@ -40,7 +40,15 @@ public static class StreamTail
         return samples[Index(Math.Max(0, afterMs - OverlapMs))..];
     }
 
-    /// The dictation's text from the stream and the tail pass over `Tail`'s audio.
+    /// The coverage the tail pass should start from. A stream holding fewer words than `Stitch` needs to find a
+    /// seam cannot be stitched however much audio it covered, so it counts as covering nothing: the tail pass then
+    /// transcribes the whole recording and `Combine` uses it alone. Without this, a two-word stream covering
+    /// 1.6 s pasted "Hi Joel, Hi Joel, quick update…" and one covering 2.4 s pasted "Hi Joel, Joel, …" (third review).
+    public static int EffectiveCoveredMs(string streamed, int coveredMs) =>
+        streamed.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length < Stitch.MinimumAnchor ? 0 : coveredMs;
+
+    /// The dictation's text from the stream and the tail pass over `Tail`'s audio; pass the coverage from
+    /// `EffectiveCoveredMs` to both.
     ///
     /// When the stream covered no more than `OverlapMs`, the tail pass started at the first sample: it is a
     /// transcription of the whole recording, so it replaces the streamed text rather than being stitched to

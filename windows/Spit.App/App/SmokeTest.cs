@@ -111,7 +111,7 @@ public static class SmokeTest
 
             (report.StreamedText, report.StreamMs, report.StreamSegments) = await StreamAsync(transcriber, samples, report.AudioMs, hint);
 
-            report.ExpectedWordsFound = ContainsExpectedWord(once.Text);
+            report.ExpectedWordsFound = ContainsExpectedWord(once.Text) && report.StreamedText is { } live && ContainsExpectedWord(live);
             report.Ok = once.Text.Length > 0 && report.ExpectedWordsFound;
             if (!report.Ok) report.Error = once.Text.Length == 0 ? "the transcription was empty" : "none of the fixture's expected words were transcribed";
         }
@@ -153,10 +153,11 @@ public static class SmokeTest
         var result = await session.FinishAsync();
         if (result is null) return (null, (int)clock.ElapsedMilliseconds, 0);
         var text = result.Text;
-        if (StreamTail.Tail(samples, result.CoveredMs, audioMs) is { } tail)
+        var covered = StreamTail.EffectiveCoveredMs(result.Text, result.CoveredMs);
+        if (StreamTail.Tail(samples, covered, audioMs) is { } tail)
         {
             var t = await transcriber.TranscribeAsync(tail, hint, progress: null);
-            text = StreamTail.Combine(text, result.CoveredMs, t.Text);
+            text = StreamTail.Combine(text, covered, t.Text);
         }
         return (text, (int)clock.ElapsedMilliseconds, result.Segments);
     }

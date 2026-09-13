@@ -58,5 +58,5 @@ jobs:
           # so the last uploader always leaves a complete file.
           SUMS=$(mktemp -d)
           gh release download "$TAG" --pattern 'Spit.dmg' --pattern 'Spit-Setup.exe' --dir "$SUMS"
-          (cd "$SUMS" && sha256sum $(ls Spit.dmg Spit-Setup.exe 2>/dev/null) > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          (cd "$SUMS" && sha256sum $(ls Spit.dmg Spit-Setup.exe 2>/dev/null) | sed 's/ \*/  /' > SHA256SUMS.txt && cat SHA256SUMS.txt)
           gh release upload "$TAG" "$SUMS/SHA256SUMS.txt" --clobber
