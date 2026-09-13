@@ -505,6 +505,12 @@ build because §2 excluded it.
   `LiveTranscription.Start` finishes rather than inherits a stale session; (2) a double-tap while the model loads latched
   with no recording — the gesture is reset whenever a start does not leave capture running. Suggestion (not built): the
   Mac `Coordinator` shares both patterns.
+- **Measured on GitHub's `windows-latest` (no GPU), CI run 34769047187, `en.wav` 12,522 ms, q5_0 model:** one pass 85,137 ms
+  on the default order (Vulkan build loaded; whisper.cpp logged "no GPU found" and ran on the CPU device) and 85,098 ms
+  forced to the CPU runtime — identical, so the Vulkan-first order costs nothing on a GPU-less PC and is kept. Live path
+  155–158 s. Both texts correct and identical ("Hi Joel, quick update. The MiraSite dashboard is running on Convex now,
+  and the Olamaki lives on the VPS…"). ~6.8× slower than real time on a 4-vCPU runner is open question 3 (Miguel, after
+  S1 on a real PC), not a defect in the build.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

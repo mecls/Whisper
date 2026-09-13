@@ -209,24 +209,24 @@ only trust the boxes if they were ticked as the work happened.
   - [x] 5.10 `--smoke-test` mode: start every service without the UI loop, load the model if present,
         transcribe a WAV passed on the command line, write `smoke.json`, exit 0/1 — used only by CI
 - [ ] 6.0 Windows installer and CI
-  - [ ] 6.1 `windows/scripts/pack.ps1`: `dotnet publish -c Release -r win-x64 --self-contained`, then
+  - [x] 6.1 `windows/scripts/pack.ps1`: `dotnet publish -c Release -r win-x64 --self-contained`, then
         `vpk pack --packId Spit --packVersion (VERSION) --mainExe Spit.exe --packTitle Spit` → `Spit-Setup.exe`
-  - [ ] 6.2 `.github/workflows/windows-ci.yml` on `pull_request` and pushes to `spit-mac-windows`:
+  - [x] 6.2 `.github/workflows/windows-ci.yml` on `pull_request` and pushes to `spit-mac-windows`:
         Core tests on `ubuntu-latest`; on `windows-latest` build, test, pack, upload `Spit-Setup.exe`
         as a workflow artifact (never a release)
-  - [ ] 6.3 `windows/Spit.App.Tests` (Windows-only, run in CI): clipboard snapshot round-trip,
+  - [x] 6.3 `windows/Spit.App.Tests` (Windows-only, run in CI): clipboard snapshot round-trip,
         own-process elevation probe, `ForegroundContext` for a spawned Notepad, credential write/read/delete
         under a test target, launch-at-login registry round-trip under a test value name
-  - [ ] 6.4 CI model job: cache the q5_0 model by SHA-256, run `Spit.exe --smoke-test mac/Fixtures/en.wav`,
+  - [x] 6.4 CI model job: cache the q5_0 model by SHA-256, run `Spit.exe --smoke-test mac/Fixtures/en.wav`,
         assert non-empty text and record the milliseconds in the job summary
-  - [ ] 6.5 CI install job: `Spit-Setup.exe --silent`, check `%LocalAppData%\Spit\Spit.exe` exists, start
+  - [x] 6.5 CI install job: `Spit-Setup.exe --silent`, check `%LocalAppData%\Spit\Spit.exe` exists, start
         it, confirm the process is alive after 15 s and a second launch exits, then uninstall and confirm
         `%LOCALAPPDATA%\Miraside\Spit\` remains
   - [ ] 6.6 `.github/workflows/release-windows.yml` on `v*` tags: tag == `VERSION`, `dotnet test`, pack,
         `gh release create --draft` if absent, upload `Spit-Setup.exe` only (R8–R11)
 - [ ] 7.0 Docs and the `/spit` page
   - [x] 7.1 `docs/API.md`: note under `Settings` that `hotkey` is Mac-only and other clients echo it (R46)
-  - [ ] 7.2 `README.md`: test counts (143 Mac, the new Windows count), a "Windows" section with the
+  - [x] 7.2 `README.md`: test counts (143 Mac, the new Windows count), a "Windows" section with the
         build and test commands, and "Install" pointing at `/spit`
   - [x] 7.3 `../../site/spit/index.html`: both buttons on `latest/download`, `SHA256SUMS.txt` link, every
         R18 claim, Mac Gatekeeper steps; the Windows warning copy left as a marked block until 8.2's
