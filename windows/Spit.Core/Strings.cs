@@ -124,6 +124,7 @@ public static class Strings
     public const string SignOut = "Sign out";
     public const string NotConnected = "Not connected";
     public static string ConnectedAs(string name) => $"Connected as {name}";
+    public static string SaveTokenError(string message) => $"Couldn't save the token: {message}";
 
     public const string DictionaryTermPlaceholder = "Term";
     public const string DictionaryReplacementPlaceholder = "Replacement (optional)";

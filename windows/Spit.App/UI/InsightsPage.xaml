@@ -1,0 +1,93 @@
+<UserControl x:Class="Spit.App.InsightsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:core="clr-namespace:Spit.Core;assembly=Spit.Core"
+             FontFamily="{DynamicResource Spit.Font}"
+             Foreground="{DynamicResource Spit.Text}"
+             Focusable="True">
+    <DockPanel>
+        <Grid DockPanel.Dock="Top" Margin="20,16,20,12">
+            <TextBlock Style="{DynamicResource Spit.PageTitle}"
+                       VerticalAlignment="Center"
+                       Text="{x:Static core:Strings.InsightsTitle}" />
+            <Button x:Name="RefreshButton"
+                    HorizontalAlignment="Right"
+                    ToolTip="Ctrl+R"
+                    Click="OnRefresh">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Margin="0,0,6,0" VerticalAlignment="Center"
+                               FontFamily="{DynamicResource Spit.IconFont}" FontSize="12"
+                               Text="&#xE72C;" />
+                    <TextBlock VerticalAlignment="Center" Text="{x:Static core:Strings.InsightsRefresh}" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- One line under the title; never a dialog (insights rule 23). -->
+        <Border x:Name="NoticeBar"
+                DockPanel.Dock="Top"
+                Visibility="Collapsed"
+                Padding="20,10"
+                Background="{DynamicResource Spit.Notice}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Margin="0,0,8,0" VerticalAlignment="Center"
+                           FontFamily="{DynamicResource Spit.IconFont}" FontSize="13"
+                           Foreground="{DynamicResource Spit.TextSecondary}"
+                           Text="&#xE7BA;" />
+                <TextBlock x:Name="NoticeText"
+                           VerticalAlignment="Center"
+                           FontSize="13"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource Spit.TextSecondary}" />
+                <TextBlock x:Name="NoticeLinkHost" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="13" Visibility="Collapsed">
+                    <Hyperlink Click="OnOpenServerSettings">
+                        <Run Text="{x:Static core:Strings.Settings}" />
+                    </Hyperlink>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <Grid Margin="20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="16" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Grid.Column="0" Style="{DynamicResource Spit.CardBorder}" MinHeight="190">
+                    <StackPanel>
+                        <TextBlock Style="{DynamicResource Spit.CardTitle}" Text="{x:Static core:Strings.CardTotalWords}" />
+                        <StackPanel x:Name="TotalWordsBody" Margin="0,14,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="0" Grid.Column="2" Style="{DynamicResource Spit.CardBorder}" MinHeight="190">
+                    <StackPanel>
+                        <TextBlock Style="{DynamicResource Spit.CardTitle}" Text="{x:Static core:Strings.CardWpm}" />
+                        <StackPanel x:Name="WpmBody" Margin="0,14,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="2" Grid.Column="0" Style="{DynamicResource Spit.CardBorder}" MinHeight="190">
+                    <StackPanel>
+                        <TextBlock Style="{DynamicResource Spit.CardTitle}" Text="{x:Static core:Strings.CardStreak}" />
+                        <StackPanel x:Name="StreakBody" Margin="0,14,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="2" Grid.Column="2" Style="{DynamicResource Spit.CardBorder}" MinHeight="190">
+                    <StackPanel>
+                        <TextBlock Style="{DynamicResource Spit.CardTitle}" Text="{x:Static core:Strings.CardApps}" />
+                        <StackPanel x:Name="AppsBody" Margin="0,14,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

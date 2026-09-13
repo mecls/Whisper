@@ -1,0 +1,117 @@
+<UserControl x:Class="Spit.App.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:core="clr-namespace:Spit.Core;assembly=Spit.Core"
+             FontFamily="{DynamicResource Spit.Font}"
+             Foreground="{DynamicResource Spit.Text}">
+    <DockPanel>
+        <!-- The four tabs of the Mac's SettingsTabs, in its order. -->
+        <Border DockPanel.Dock="Top" Padding="20,16,20,12" BorderBrush="{DynamicResource Spit.Divider}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <RadioButton x:Name="TabGeneral" GroupName="SettingsTabs" Style="{DynamicResource Spit.Tab}"
+                             Content="{x:Static core:Strings.SettingsTabGeneral}" Checked="OnTabChecked" />
+                <RadioButton x:Name="TabModel" GroupName="SettingsTabs" Style="{DynamicResource Spit.Tab}"
+                             Content="{x:Static core:Strings.SettingsTabModel}" Checked="OnTabChecked" />
+                <RadioButton x:Name="TabServer" GroupName="SettingsTabs" Style="{DynamicResource Spit.Tab}"
+                             Content="{x:Static core:Strings.SettingsTabServer}" Checked="OnTabChecked" />
+                <RadioButton x:Name="TabDictionary" GroupName="SettingsTabs" Style="{DynamicResource Spit.Tab}"
+                             Content="{x:Static core:Strings.SettingsTabDictionary}" Checked="OnTabChecked" />
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <!-- One 520 px column, centred and pinned to the top, so switching tabs changes the content and
+                 nothing else (Mac settingsPane()). -->
+            <Grid MaxWidth="520" Margin="20,20,20,24" HorizontalAlignment="Stretch" VerticalAlignment="Top">
+
+                <!-- General -->
+                <StackPanel x:Name="GeneralPanel">
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{DynamicResource Spit.FieldLabel}" Text="{x:Static core:Strings.HotkeyPickerLabel}" />
+                        <ComboBox x:Name="HotkeyCombo" Grid.Column="1" SelectionChanged="OnHotkeyChanged" />
+                    </Grid>
+                    <CheckBox x:Name="SoundsCheck" Margin="0,0,0,10" Content="{x:Static core:Strings.PlaySounds}" Click="OnSoundsClick" />
+                    <CheckBox x:Name="ShowTextCheck" Margin="0,0,0,10" Content="{x:Static core:Strings.ShowTextInHUDToggle}" Click="OnShowTextClick" />
+                    <CheckBox x:Name="ShowBarCheck" Margin="0,0,0,10" Content="{x:Static core:Strings.ShowBar}" Click="OnShowBarClick" />
+                    <CheckBox x:Name="LiveCheck" Margin="0,0,0,4" Content="{x:Static core:Strings.LiveTranscription}" Click="OnLiveClick" />
+                    <TextBlock Style="{DynamicResource Spit.Note}" Margin="24,0,0,10" Text="{x:Static core:Strings.LiveTranscriptionNote}" />
+                    <CheckBox x:Name="LaunchCheck" Margin="0,0,0,4" Content="{x:Static core:Strings.LaunchAtLogin}" Click="OnLaunchClick" />
+                    <TextBlock x:Name="LaunchError" Style="{DynamicResource Spit.Error}" Margin="24,0,0,0" Visibility="Collapsed" />
+                </StackPanel>
+
+                <!-- Model -->
+                <StackPanel x:Name="ModelPanel" Visibility="Collapsed">
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{DynamicResource Spit.FieldLabel}" Text="{x:Static core:Strings.ModelPickerLabel}" />
+                        <ComboBox x:Name="ModelCombo" Grid.Column="1" SelectionChanged="OnModelChanged" />
+                    </Grid>
+                    <TextBlock x:Name="ActiveModelText" Style="{DynamicResource Spit.Body}" Margin="0,0,0,4" />
+                    <TextBlock x:Name="ModelStatusText" Style="{DynamicResource Spit.Caption}" Margin="0,0,0,10" />
+                    <StackPanel x:Name="DownloadProgressPanel" Margin="0,0,0,12" Visibility="Collapsed">
+                        <ProgressBar x:Name="DownloadProgress" Minimum="0" Maximum="1" />
+                        <TextBlock x:Name="DownloadProgressText" Style="{DynamicResource Spit.Caption}" Margin="0,4,0,0"
+                                   Typography.NumeralAlignment="Tabular" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                        <Button x:Name="DownloadButton" Margin="0,0,8,0" Content="{x:Static core:Strings.DownloadModel}" Click="OnDownloadClick" />
+                        <Button x:Name="ReloadButton" Margin="0,0,8,0" Content="{x:Static core:Strings.ReloadModel}" Click="OnReloadClick" />
+                        <Button x:Name="DeleteButton" Content="{x:Static core:Strings.DeleteModel}" Click="OnDeleteClick" />
+                    </StackPanel>
+                    <TextBlock x:Name="DeleteError" Style="{DynamicResource Spit.Error}" Margin="0,0,0,6" Visibility="Collapsed" />
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{DynamicResource Spit.FieldLabel}" Text="{x:Static core:Strings.DefaultLanguage}" />
+                        <ComboBox x:Name="LanguageCombo" Grid.Column="1" SelectionChanged="OnLanguageChanged" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Server -->
+                <StackPanel x:Name="ServerPanel" Visibility="Collapsed">
+                    <TextBlock Style="{DynamicResource Spit.FieldLabel}" Margin="0,0,0,4" Text="{x:Static core:Strings.ServerURLLabel}" />
+                    <TextBox x:Name="ServerUrlBox" LostKeyboardFocus="OnServerUrlCommit" KeyDown="OnServerUrlKeyDown" />
+                    <TextBlock Style="{DynamicResource Spit.Note}" Margin="0,4,0,14" Text="{x:Static core:Strings.ServerURLChangeNote}" />
+                    <TextBlock Style="{DynamicResource Spit.FieldLabel}" Margin="0,0,0,4" Text="{x:Static core:Strings.ApiTokenLabel}" />
+                    <PasswordBox x:Name="TokenBox" PasswordChanged="OnTokenChanged" />
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,10">
+                        <Button x:Name="SaveTokenButton" Margin="0,0,8,0" Style="{DynamicResource Spit.AccentButton}"
+                                Content="{x:Static core:Strings.SaveToken}" Click="OnSaveTokenClick" />
+                        <Button x:Name="TestConnectionButton" Margin="0,0,8,0" Content="{x:Static core:Strings.TestConnection}" Click="OnTestConnectionClick" />
+                        <Button x:Name="SignOutButton" Content="{x:Static core:Strings.SignOut}" Click="OnSignOutClick" />
+                    </StackPanel>
+                    <TextBlock x:Name="ConnectionStatus" Style="{DynamicResource Spit.Body}" />
+                    <TextBlock x:Name="SaveTokenError" Style="{DynamicResource Spit.Error}" Margin="0,4,0,0" Visibility="Collapsed" />
+                </StackPanel>
+
+                <!-- Dictionary -->
+                <StackPanel x:Name="DictionaryPanel" Visibility="Collapsed">
+                    <Border Style="{DynamicResource Spit.CardBorder}" Padding="12,8" Margin="0,0,0,16">
+                        <StackPanel>
+                            <ProgressBar x:Name="DictionaryLoading" IsIndeterminate="True" Margin="0,8" Visibility="Collapsed" />
+                            <TextBlock x:Name="DictionaryEmptyText" Style="{DynamicResource Spit.Caption}" Margin="0,6"
+                                       Visibility="Collapsed" Text="{x:Static core:Strings.DictionaryEmpty}" />
+                            <StackPanel x:Name="TermsList" />
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Style="{DynamicResource Spit.Caption}" Margin="0,0,0,4" Text="{x:Static core:Strings.DictionaryTermPlaceholder}" />
+                    <TextBox x:Name="NewTermBox" Margin="0,0,0,10" TextChanged="OnNewTermChanged" />
+                    <TextBlock Style="{DynamicResource Spit.Caption}" Margin="0,0,0,4" Text="{x:Static core:Strings.DictionaryReplacementPlaceholder}" />
+                    <TextBox x:Name="NewReplacementBox" Margin="0,0,0,10" />
+                    <CheckBox x:Name="TeamWideCheck" Margin="0,0,0,10" Content="{x:Static core:Strings.DictionaryTeamWide}" />
+                    <Button x:Name="AddTermButton" Content="{x:Static core:Strings.DictionaryAdd}" IsEnabled="False" Click="OnAddTermClick" />
+                    <TextBlock x:Name="DictionaryError" Style="{DynamicResource Spit.Error}" Margin="0,8,0,0" Visibility="Collapsed" />
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>
