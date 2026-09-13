@@ -99,6 +99,7 @@ public static class SmokeTest
             report.AsrModel = transcriber.AsrModel;
             await transcriber.PrepareAsync(_ => { });
             report.Runtime = RuntimeOptions.LoadedLibrary?.ToString();
+            report.RuntimeRequested = Environment.GetEnvironmentVariable(WhisperTranscriber.RuntimeVariable) ?? "auto";
 
             var hint = new TranscribeHint(Language: null, Vocabulary);
             var clock = Stopwatch.StartNew();
@@ -121,6 +122,7 @@ public static class SmokeTest
             Log.Failure("smoke", "smoke test", e);
         }
 
+        report.BackendLog = WhisperTranscriber.BackendLog;
         try
         {
             File.WriteAllBytes(reportPath, JsonSerializer.SerializeToUtf8Bytes(report, Json));
@@ -154,7 +156,7 @@ public static class SmokeTest
         if (StreamTail.Tail(samples, result.CoveredMs, audioMs) is { } tail)
         {
             var t = await transcriber.TranscribeAsync(tail, hint, progress: null);
-            text = Stitch.Join(text, t.Text);
+            text = StreamTail.Combine(text, result.CoveredMs, t.Text);
         }
         return (text, (int)clock.ElapsedMilliseconds, result.Segments);
     }
@@ -211,6 +213,8 @@ public static class SmokeTest
         public string? StreamedText { get; set; }
         public string? AsrModel { get; set; }
         public string? Runtime { get; set; }
+        public string? RuntimeRequested { get; set; }
+        public IReadOnlyList<string>? BackendLog { get; set; }
         public string? Language { get; set; }
         public int AudioMs { get; set; }
         public int TranscribeMs { get; set; }

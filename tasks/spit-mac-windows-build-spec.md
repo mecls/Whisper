@@ -494,6 +494,11 @@ build because §2 excluded it.
   single-instance mutex runs Spit anyway with a log line (a second hook is a smaller harm than no Spit).
 - CI's install check launches `current\Spit.exe` and also the root launcher, then asserts exactly one Spit process —
   Velopack's root `Spit.exe` is a launcher that exits.
+- **`StreamTail.Combine`: when the stream covered ≤ `OverlapMs`, the tail pass (which then starts at sample 0) replaces
+  the streamed text instead of being stitched.** The first full CI smoke run pasted "Hi Joel Hi Joel, quick update…":
+  on a slow machine the stream had confirmed two words, `Stitch` needs a 3-word anchor, so it appended. Suggestion
+  (not built — §2 forbids changing Mac behaviour): the Mac's `Coordinator` has the same latent seam whenever its stream
+  covers ≤ 1.5 s.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

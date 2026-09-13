@@ -1,9 +1,11 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using Spit.Core;
 using Whisper.net;
 using Whisper.net.LibraryLoader;
+using Whisper.net.Logger;
 
 namespace Spit.App;
 
@@ -19,6 +21,18 @@ public sealed partial class WhisperTranscriber : ISegmentTranscriber, IAsyncDisp
     /// The Mac keeps the first 150 prompt tokens. Whisper.net exposes no tokenizer, so this counts words;
     /// dictionary terms are mostly names, which run to about 1.5 tokens a word.
     public const int PromptWordLimit = 100;
+
+    /// `SPIT_WHISPER_RUNTIME=cpu` or `=vulkan` forces one runtime. CI runs its smoke test both ways, and spike S1
+    /// measures both on a real PC; unset, Vulkan is tried first.
+    public const string RuntimeVariable = "SPIT_WHISPER_RUNTIME";
+
+    private static readonly ConcurrentQueue<string> backendLines = new();
+    private static IDisposable? backendLogger;
+
+    /// whisper.cpp's own lines about the backend and device it chose — the Vulkan device's name says whether
+    /// a real GPU is doing the work. Only lines with whisper.cpp's backend prefixes are kept, so no
+    /// transcript text can reach this list or the log.
+    public static IReadOnlyList<string> BackendLog => backendLines.ToArray();
 
     private readonly SemaphoreSlim inference = new(1, 1);
     private readonly ModelDownloader models;
@@ -156,8 +170,30 @@ public sealed partial class WhisperTranscriber : ISegmentTranscriber, IAsyncDisp
 
     // CUDA is left out (rule 24): it needs a CUDA toolkit friends won't have. Whisper.net stops at the
     // first runtime that loads, and reads this order only before its first factory exists.
-    private static void ConfigureRuntimes() =>
-        RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Vulkan, RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx];
+    private static void ConfigureRuntimes()
+    {
+        backendLogger ??= LogProvider.AddLogger((_, message) =>
+        {
+            if (!IsBackendLine(message) || backendLines.Count >= 40) return;
+            var line = message.Trim();
+            backendLines.Enqueue(line);
+            Log.Info("asr", line);
+        });
+        RuntimeOptions.RuntimeLibraryOrder = Environment.GetEnvironmentVariable(RuntimeVariable)?.Trim().ToLowerInvariant() switch
+        {
+            "cpu" => [RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx],
+            "vulkan" => [RuntimeLibrary.Vulkan],
+            _ => [RuntimeLibrary.Vulkan, RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx],
+        };
+    }
+
+    private static readonly string[] BackendPrefixes = ["ggml_", "whisper_backend", "whisper_init", "whisper_model_load", "load_backend", "register_backend"];
+
+    private static bool IsBackendLine(string message)
+    {
+        var trimmed = message.TrimStart();
+        return BackendPrefixes.Any(prefix => trimmed.StartsWith(prefix, StringComparison.Ordinal));
+    }
 
     private static string? LanguageOrDetect(string? language) =>
         string.IsNullOrWhiteSpace(language) || language == "auto" ? null : language;

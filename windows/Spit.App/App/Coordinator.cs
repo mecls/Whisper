@@ -644,7 +644,7 @@ public sealed class Coordinator : IDisposable
                     try
                     {
                         var t = await Task.Run(() => current.TranscribeAsync(tail, hint, progress: null));
-                        text = Stitch.Join(text, t.Text);
+                        text = StreamTail.Combine(text, streamed.CoveredMs, t.Text);
                         asrMs = t.DurationMs;
                     }
                     catch (Exception e)

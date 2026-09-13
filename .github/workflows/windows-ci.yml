@@ -88,8 +88,8 @@ jobs:
           New-Item -ItemType Directory -Force $dir | Out-Null
           Invoke-WebRequest "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$env:MODEL_FILE" -OutFile (Join-Path $dir $env:MODEL_FILE)
 
-      - name: Smoke test — transcribe a fixture with the published app
-        timeout-minutes: 20
+      - name: Smoke test — transcribe a fixture with the published app (auto and CPU runtimes)
+        timeout-minutes: 30
         shell: pwsh
         run: |
           $model = Join-Path $env:RUNNER_TEMP "spit-model\$env:MODEL_FILE"
@@ -99,14 +99,29 @@ jobs:
           New-Item -ItemType Directory -Force (Join-Path $data 'models') | Out-Null
           Copy-Item $model (Join-Path $data "models\$env:MODEL_FILE")
           $env:SPIT_DATA_DIR = $data
-          $report = Join-Path $env:RUNNER_TEMP 'smoke.json'
-          $p = Start-Process -FilePath windows/publish/Spit.exe -ArgumentList @('--smoke-test', (Resolve-Path mac/Fixtures/en.wav), '--report', $report) -PassThru -Wait -NoNewWindow
-          if (-not (Test-Path $report)) { throw "no smoke report (exit $($p.ExitCode))" }
-          Get-Content $report
-          $r = Get-Content $report -Raw | ConvertFrom-Json
-          if ($p.ExitCode -ne 0 -or -not $r.ok) { throw "smoke test failed: $($r.error)" }
-          if ([string]::IsNullOrWhiteSpace($r.text)) { throw 'smoke test produced no text' }
-          "| model | runtime | audio ms | transcribe ms |`n|---|---|---|---|`n| $($r.asrModel) | $($r.runtime) | $($r.audioMs) | $($r.transcribeMs) |" >> $env:GITHUB_STEP_SUMMARY
+          "| runtime asked | runtime loaded | audio ms | one-pass ms | live ms | text | live text |`n|---|---|---|---|---|---|---|" >> $env:GITHUB_STEP_SUMMARY
+          $failures = @()
+          # `auto` is what friends get (Vulkan first); `cpu` is the comparison the runtime order is judged by.
+          foreach ($runtime in @('auto', 'cpu')) {
+            $env:SPIT_WHISPER_RUNTIME = if ($runtime -eq 'auto') { '' } else { $runtime }
+            $report = Join-Path $env:RUNNER_TEMP "smoke-$runtime.json"
+            $p = Start-Process -FilePath windows/publish/Spit.exe -ArgumentList @('--smoke-test', (Resolve-Path mac/Fixtures/en.wav), '--report', $report) -PassThru -Wait -NoNewWindow
+            if (-not (Test-Path $report)) { $failures += "${runtime}: no report (exit $($p.ExitCode))"; continue }
+            "--- smoke report ($runtime) ---"
+            Get-Content $report
+            $r = Get-Content $report -Raw | ConvertFrom-Json
+            "| $runtime | $($r.runtime) | $($r.audioMs) | $($r.transcribeMs) | $($r.streamMs) | $($r.text) | $($r.streamedText) |" >> $env:GITHUB_STEP_SUMMARY
+            if ($p.ExitCode -ne 0 -or -not $r.ok) { $failures += "${runtime}: $($r.error)"; continue }
+            if ([string]::IsNullOrWhiteSpace($r.streamedText)) { $failures += "${runtime}: the live path produced no text" }
+            # A word the stream heard must not be pasted twice (the "Hi Joel Hi Joel" seam).
+            $words = @($r.streamedText -split '\s+' | Where-Object { $_ })
+            for ($i = 1; $i -lt [Math]::Min($words.Count, 6); $i += 1) {
+              $a = ($words[0..($i - 1)] -join ' ').ToLowerInvariant().Trim(',.')
+              $b = ($words[$i..([Math]::Min($words.Count, 2 * $i) - 1)] -join ' ').ToLowerInvariant().Trim(',.')
+              if ($i -ge 2 -and $a -eq $b) { $failures += "${runtime}: live text repeats its opening words ('$a')" }
+            }
+          }
+          if ($failures.Count -gt 0) { throw ($failures -join '; ') }
 
       - name: Install, run, second instance, uninstall
         timeout-minutes: 10

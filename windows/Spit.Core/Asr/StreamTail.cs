@@ -39,4 +39,18 @@ public static class StreamTail
         // What to transcribe starts earlier, so the word straddling the boundary is whole.
         return samples[Index(Math.Max(0, afterMs - OverlapMs))..];
     }
+
+    /// The dictation's text from the stream and the tail pass over `Tail`'s audio.
+    ///
+    /// When the stream covered no more than `OverlapMs`, the tail pass started at the first sample: it is a
+    /// transcription of the whole recording, so it replaces the streamed text rather than being stitched to
+    /// it. Stitching there cannot work — the stream holds too few words for `Stitch` to find a seam, so it
+    /// appends, and every word the stream heard is pasted twice. A Windows CI smoke run pasted "Hi Joel Hi
+    /// Joel, quick update…" exactly this way: on a slow machine the stream had confirmed two words when the
+    /// key came up.
+    public static string Combine(string streamed, int coveredMs, string tail)
+    {
+        if (string.IsNullOrWhiteSpace(tail)) return streamed.Trim();
+        return coveredMs <= OverlapMs ? tail.Trim() : Stitch.Join(streamed, tail);
+    }
 }
