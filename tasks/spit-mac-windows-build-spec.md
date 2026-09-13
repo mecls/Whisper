@@ -499,6 +499,12 @@ build because §2 excluded it.
   on a slow machine the stream had confirmed two words, `Stitch` needs a 3-word anchor, so it appended. Suggestion
   (not built — §2 forbids changing Mac behaviour): the Mac's `Coordinator` has the same latent seam whenever its stream
   covers ≤ 1.5 s.
+- A second review confirmed two more Windows defects, both fixed: (1) a stop the reducer rejects ("Nothing heard") never
+  reached `.transcribe`, so a live stream kept running and the next dictation inherited it and pasted the rejected
+  dictation's words — the stream is now finished on every stop that does not become a transcription, and
+  `LiveTranscription.Start` finishes rather than inherits a stale session; (2) a double-tap while the model loads latched
+  with no recording — the gesture is reset whenever a start does not leave capture running. Suggestion (not built): the
+  Mac `Coordinator` shares both patterns.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

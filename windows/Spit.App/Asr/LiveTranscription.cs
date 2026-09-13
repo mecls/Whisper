@@ -37,10 +37,12 @@ public sealed class LiveTranscription
     /// recorded length.
     public int CoveredMs => session?.CoveredMs ?? 0;
 
-    /// Begins streaming off the already-running capture. A stream still running is left alone, as on the Mac.
+    /// Begins streaming off the already-running capture. A session still running here belongs to a dictation that
+    /// ended without finishing it, so it is finished and its result dropped. The Mac leaves it alone; inheriting it
+    /// pastes the previous dictation's words and skips this one's opening audio.
     public void Start(ISegmentTranscriber transcriber, TranscribeHint hint)
     {
-        if (session?.IsRunning == true) return;
+        if (session is { IsRunning: true } stale) _ = FinishStaleAsync(stale);
         var next = new StreamingSession(transcriber, capture.Snapshot, hint, time, message => HookLog.Info("streaming", message));
         next.Changed += () => dispatcher.Post(_ =>
         {
@@ -54,4 +56,16 @@ public sealed class LiveTranscription
 
     /// Ends the stream once any pass in flight has finished; null means fall back to a one-pass transcription.
     public Task<StreamResult?> FinishAsync() => session?.FinishAsync() ?? Task.FromResult<StreamResult?>(null);
+
+    private static async Task FinishStaleAsync(StreamingSession stale)
+    {
+        try
+        {
+            await stale.FinishAsync();
+        }
+        catch (Exception e)
+        {
+            HookLog.Error("streaming", $"finish a stale stream: {HookLog.Describe(e)}");
+        }
+    }
 }

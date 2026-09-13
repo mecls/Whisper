@@ -83,6 +83,9 @@ public sealed class Coordinator : IDisposable
     private readonly Dictionary<Guid, int> targetProcess = [];
     private int? pendingTargetProcess;
     private string? startFailure;
+    /// Set by `.transcribe`; read straight after the `.audioStopped` a stop sends, to tell a stop that became a
+    /// transcription from one the reducer rejected.
+    private bool transcribeRequested;
 
     private long? lastPrewarm;
     private readonly List<float> levels = new(LevelsKept);
@@ -353,6 +356,10 @@ public sealed class Coordinator : IDisposable
         {
             case TapLatch.Outcome.StartDictation:
                 SendHotkeyDown();
+                // `.hotkeyDown` refuses while the model loads, and a microphone can fail to open. The gesture must
+                // not advance over a dictation that never began: a double-tap would latch with no recording, show
+                // the red indicator over a closed microphone, and swallow the first real press once the model is ready.
+                if (!capture.IsCapturing) tapLatch.Reset();
                 break;
 
             case TapLatch.Outcome.HoldOpen:
@@ -363,6 +370,11 @@ public sealed class Coordinator : IDisposable
 
             case TapLatch.Outcome.Latch:
                 CancelLatchWindow();
+                if (!capture.IsCapturing)
+                {
+                    tapLatch.Reset();
+                    break;
+                }
                 SetLatched();
                 break;
 
@@ -593,7 +605,12 @@ public sealed class Coordinator : IDisposable
         pendingRelease = time.GetTimestamp();
         var (samples, ms) = capture.Stop();
         if (store.Current.Sounds) sounds.PlayStop();
+        transcribeRequested = false;
         Send(new MachineEvent.AudioStopped(samples, ms, EnergyGate.HasSpeech(samples)));
+        // A stop the reducer rejects ("Nothing heard": too short, or no speech) never reaches `.transcribe`, the
+        // only other place a stream is finished. Left running, the next dictation inherits it: it pastes this
+        // dictation's words and never decodes its own opening audio (proven by review against StreamingSession).
+        if (!transcribeRequested && live.IsRunning) _ = FinishStreamQuietlyAsync();
     }
 
     private void StartStreamingIfEnabled()
@@ -612,6 +629,7 @@ public sealed class Coordinator : IDisposable
 
     private void Transcribe(Guid id)
     {
+        transcribeRequested = true;
         // `.transcribe` comes out of the `.audioStopped` that `.stopRecording` sends in the same turn, so this is
         // the first point at which the release just stamped has an id to belong to.
         if (pendingRelease is { } release)
