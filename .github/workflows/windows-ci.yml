@@ -19,8 +19,9 @@ concurrency:
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_NOLOGO: 1
-  MODEL_FILE: ggml-large-v3-turbo-q5_0.bin
-  MODEL_SHA256: 394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
+  # The default model friends get (ModelCatalog.DefaultFile): the smoke test must prove what ships.
+  MODEL_FILE: ggml-small-q8_0.bin
+  MODEL_SHA256: 49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f
 
 jobs:
   core:

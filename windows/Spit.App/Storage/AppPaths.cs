@@ -4,7 +4,7 @@ namespace Spit.App;
 
 /// Everything Spit writes lives under `%LOCALAPPDATA%\Miraside\Spit\`, never in Velopack's install
 /// directory: an update replaces that directory and an uninstall deletes it, and neither may take a
-/// 574 MB model or the user's settings with it (rule 5).
+/// downloaded model or the user's settings with it (rule 5).
 public sealed class AppPaths
 {
     /// When set, replaces the data folder for the whole process. Only CI's `--smoke-test` step uses it, so the

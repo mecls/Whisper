@@ -77,7 +77,8 @@ public static class Strings
     public const string TimeZoneUnknown = "Couldn't determine your time zone";
     public const string ModelReady = "Model: ready";
     public static string ModelError(string message) => $"Model error: {message}";
-    public const string ModelLabelTurbo = "Large v3 Turbo (compressed, 574 MB) — recommended";
+    public const string ModelLabelSmall = "Small (264 MB) — recommended";
+    public const string ModelLabelTurbo = "Large v3 Turbo (compressed, 574 MB) — more accurate, needs a fast PC";
     public const string ModelLabelLarge = "Large v3 Turbo (full, 1.6 GB) — maximum accuracy";
 
     // Set-up (replaces the Mac's onboarding permissions, rule 40)

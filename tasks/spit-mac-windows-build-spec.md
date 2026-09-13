@@ -73,10 +73,10 @@ rule in R27–R44, it is not built.
    admin prompt, creates Start Menu and desktop shortcuts, and starts `Spit.exe`.
 2. The Set-up window opens with three rows: Microphone, Hotkey ("Hold Right Ctrl now"), Token.
 3. Friend opens Settings › Server, pastes the token, clicks Save, sees "Connected as *name*". The model
-   `ggml-large-v3-turbo-q5_0.bin` (574 MB) downloads with progress in the bar.
+   `ggml-small-q8_0.bin` (264 MB) downloads with progress in the bar.
 4. Friend holds Right Ctrl in Notepad, speaks, releases. The bar shows the waveform, then
    "Transcribing…", then "Cleaning…", and the cleaned text appears at the caret. The bar returns to
-   idle 1.2 s later. `POST /v1/dictations` carries `asrModel: "whisper.cpp/ggml-large-v3-turbo-q5_0"`.
+   idle 1.2 s later. `POST /v1/dictations` carries `asrModel: "whisper.cpp/ggml-small-q8_0"`.
 
 ### Journey B — Dictation into an admin window (unhappy path: elevated target)
 1. Friend focuses Notepad run as administrator and holds Right Ctrl. Nothing happens: the hook cannot
@@ -261,7 +261,7 @@ per device (R20); there is no sign-up UI.
 | Integration | Used for | Timeout | Local fake |
 |---|---|---|---|
 | Spit server `https://voice.miraside.co` | refine, dictations, me, settings, insights, dictionary, health | 10 s; `/v1/refine` = `Budget.ms`; `HEAD /health` 3 s | `StubApi` in `Spit.Core.Tests` (port of `StubAPI.swift`) |
-| Hugging Face model download | `ggml-large-v3-turbo(-q5_0).bin` | 30 s connect, no total cap; resumable restart from zero | tests hash a small local file against a test-only pin |
+| Hugging Face model download | `ggml-small-q8_0.bin` (default), `ggml-large-v3-turbo(-q5_0).bin` | 30 s connect, no total cap; resumable restart from zero | tests hash a small local file against a test-only pin |
 | Whisper.net / whisper.cpp | speech to text | none (bounded by audio length) | `ITranscriber` + `FixedTextTranscriber` (port of the Mac's) |
 | WASAPI via NAudio | microphone | start 3 s | `IAudioSource` fed from a WAV file in smoke-test mode |
 | Win32 keyboard hook | hotkey | callback does no work | `RawKeyEvent` sequences in tests |
@@ -393,10 +393,10 @@ Append one line per decision you made that this spec did not settle, in the form
 `<what you decided> — <why, in one clause>`. Also record anything you deliberately did not
 build because §2 excluded it.
 
-- Open questions defaulted for the build: Q1 `/spit` not linked from `index.html`; Q2 accept the
-  Smart App Control block (no signing); Q3 no threshold enforced, CI records CPU ms; Q4 keep
-  `rightCtrl`+`rightAlt`; Q5 page written to `site/spit/index.html`, not deployed — each is Miguel's to
-  reverse.
+- Open questions, answered by Miguel on 2026-09-13: Q1 `/spit` is linked from the home page's index (a "Spit" row,
+  Beta); Q2 accept the Smart App Control block (no signing); Q3 **Whisper small (`ggml-small-q8_0.bin`, 264 MB) is the
+  Windows default and recommendation** — large-v3-turbo stays selectable; CI's smoke test runs the default; Q4 keep
+  `rightCtrl`+`rightAlt`; Q5 Miguel deploys `site/` later. Q6 (Ollama spending ceiling) remains open.
 - Verification of the `.exe` happens on GitHub's `windows-latest` runners, plus a `--smoke-test` mode and
   a Windows-only test project — the only way to run Windows code without Miguel's PC.
 - `mac/project.yml` keeps a copy of the version (`MARKETING_VERSION`) and `Info.plist` reads

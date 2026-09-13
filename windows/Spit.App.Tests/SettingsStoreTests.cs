@@ -19,7 +19,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal("rightCtrl", settings.Hotkey);
         Assert.True(settings.Sounds);
         Assert.True(settings.ShowTextInHUD);
-        Assert.Equal("ggml-large-v3-turbo-q5_0.bin", settings.ModelFile);
+        Assert.Equal("ggml-small-q8_0.bin", settings.ModelFile);
         Assert.Equal("https://voice.miraside.co", settings.ServerURL);
         Assert.Equal("clean", settings.Mode);
         Assert.Equal("auto", settings.Language);

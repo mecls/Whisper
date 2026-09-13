@@ -84,20 +84,21 @@ public sealed class ModelDownloaderTests : IDisposable
     }
 
     [Fact]
-    public void DefaultCatalog_PinsBothModelsFromHuggingFace()
+    public void DefaultCatalog_PinsEveryModelFromHuggingFace()
     {
         var catalog = ModelCatalog.Default;
 
         Assert.Equal(
             [
+                new ModelCatalog.Entry("ggml-small-q8_0.bin", Strings.ModelLabelSmall, 264_464_607, "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f"),
                 new ModelCatalog.Entry("ggml-large-v3-turbo-q5_0.bin", Strings.ModelLabelTurbo, 574_041_195, "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"),
                 new ModelCatalog.Entry("ggml-large-v3-turbo.bin", Strings.ModelLabelLarge, 1_624_555_275, "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69"),
             ],
             catalog.Entries);
         Assert.Equal(
-            new Uri("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin"),
+            new Uri("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin"),
             catalog.UrlFor(catalog.Find(ModelCatalog.DefaultFile)!));
-        Assert.Equal("whisper.cpp/ggml-large-v3-turbo-q5_0", ModelCatalog.AsrModelFor(ModelCatalog.DefaultFile));
+        Assert.Equal("whisper.cpp/ggml-small-q8_0", ModelCatalog.AsrModelFor(ModelCatalog.DefaultFile));
     }
 
     private static ModelCatalog Pinning(string sha256, long bytes) =>

@@ -75,6 +75,8 @@ refer to it.
   per user into `~/.dotnet` on 2026-09-13 with `dotnet-install.sh --channel 10.0`; put
   `export PATH="$HOME/.dotnet:$PATH"` in front of every `dotnet` command.
 - **Pinned model hashes** (Hugging Face LFS `oid`, read 2026-09-13):
+  `ggml-small-q8_0.bin` (the Windows default) 264,464,607 bytes, SHA-256
+  `49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f`;
   `ggml-large-v3-turbo-q5_0.bin` 574,041,195 bytes, SHA-256
   `394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2`;
   `ggml-large-v3-turbo.bin` 1,624,555,275 bytes, SHA-256
@@ -112,8 +114,8 @@ only trust the boxes if they were ticked as the work happened.
         and File Explorer
   - [ ] 1.7 **(PC)** S5: install a `0.2.0` Setup.exe, then a `0.2.1` one; confirm one install and an
         intact data folder, token and Run entry. CI covers the silent install/uninstall half (6.5)
-  - [ ] 1.8 **(PC)** Miguel answers open questions 2 (Smart App Control vs signing), 3 (latency
-        threshold, after 1.3), 4 (no Right Ctrl, after 1.6) and 5 (how `site/` is deployed)
+  - [x] 1.8 Miguel answers open questions (2026-09-13): link `/spit` from the home page — yes; accept Smart App
+        Control — yes; Windows default model — Whisper small; keep Right Ctrl + Right Alt — yes; site deployed later
 - [x] 2.0 One version and a strict Mac DMG
   - [x] 2.1 Add root `VERSION` containing `0.2.0` (R6, R7)
   - [x] 2.2 Make `mac/project.yml` read the version: `CFBundleShortVersionString: $(MARKETING_VERSION)`
