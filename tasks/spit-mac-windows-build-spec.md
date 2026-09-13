@@ -464,6 +464,16 @@ build because §2 excluded it.
   as the Mac does — watch GC pressure on long dictations.
 - `MenuMask` injects `vkE8` from the dispatcher, not the hook callback; a Right Alt tap shorter than one dispatcher turn
   could still reach a menu — spike S4 checks it.
+- Tray icons are drawn shapes packed into a multi-size .ico (Segoe MDL2 has no filled or crossed mic); the tray is
+  created with Efficiency Mode off so Windows never throttles the hook and capture.
+- Views update from `PropertyChanged` in code-behind rather than XAML bindings — a misspelled binding fails silently at
+  runtime on Windows, a misspelled property fails the build on the Mac.
+- The bar is positioned in physical pixels with `SetWindowPos` and follows foreground changes through a WinEvent hook
+  (the Windows counterpart of the Mac's app-activation observer); live text shows beside the waveform while listening.
+- Theme follows the registry's light/dark setting, system colours in high contrast, and the user's accent; font is
+  "Segoe UI" (WPF cannot select weights of the variable Segoe UI Variable).
+- `SingleInstance` calls `AllowSetForegroundWindow` before signalling, so the first instance may really come to front.
+- One `MicrophoneState` enum (with `Unknown`) serves capture and the Set-up window.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 
