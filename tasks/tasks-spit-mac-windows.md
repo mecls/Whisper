@@ -167,11 +167,11 @@ only trust the boxes if they were ticked as the work happened.
   - [ ] 4.1 Create `windows/Spit.App/Spit.App.csproj` (`net10.0-windows`, `UseWPF`, `win-x64`,
         `AssemblyName` `Spit`, `ApplicationManifest` asInvoker) with the R24 packages, a hand-written
         `Program.Main` whose first line is `VelopackApp.Build().Run()`, and `App.xaml` as Page (R44)
-  - [ ] 4.2 `Platform/KeyboardHook.cs`: `WH_KEYBOARD_LL` on a dedicated thread with its own message
+  - [x] 4.2 `Platform/KeyboardHook.cs`: `WH_KEYBOARD_LL` on a dedicated thread with its own message
         loop, always `CallNextHookEx`, posts `RawKeyEvent` to the UI thread, `Reinstall()` on resume,
         unlock and every 5 min idle; `--key-log` mode writes events to the console for S4 (R27–R29)
-  - [ ] 4.3 `Platform/MenuMask.cs`: inject `vkE8` while Right Alt is held when it is the hotkey (R35)
-  - [ ] 4.4 `Audio/AudioCapture.cs`: NAudio WASAPI capture → `WdlResamplingSampleProvider` → 16 kHz mono
+  - [x] 4.3 `Platform/MenuMask.cs`: inject `vkE8` while Right Alt is held when it is the hotkey (R35)
+  - [x] 4.4 `Audio/AudioCapture.cs`: NAudio WASAPI capture → `WdlResamplingSampleProvider` → 16 kHz mono
         Float32 into `RingBuffer`, 20 s warm keep, default-device-change rebuild that keeps samples,
         `E_ACCESSDENIED` → blocked error (R22, R39)
   - [x] 4.5 `Inject/ClipboardSnapshot.cs` and `Inject/TextInjector.cs`: allowed memory formats ≤ 5 MB,
@@ -186,7 +186,7 @@ only trust the boxes if they were ticked as the work happened.
   - [x] 4.8 `Asr/WhisperTranscriber.cs`: Whisper.net factory, temperature 0, language hint, prompt from
         dictionary terms with one retry without it, 1 s silence warm-up, one inference at a time behind a
         `SemaphoreSlim`, `asrModel = whisper.cpp/<file>` (R22, R41, R42)
-  - [ ] 4.9 `Asr/StreamingTranscriber.cs`: the 100 ms poll / > 1 s new audio / all-but-last-2 loop over
+  - [x] 4.9 `Asr/StreamingTranscriber.cs`: the 100 ms poll / > 1 s new audio / all-but-last-2 loop over
         `StreamingPolicy`, finishing any pass before the tail pass (R22, R42)
   - [x] 4.10 `Storage/TokenStore.cs` (Credential Manager, target `co.miraside.voice:<server URL>`,
         `CRED_PERSIST_LOCAL_MACHINE`), `Storage/Settings.cs` (`settings.json`), `Storage/DictionaryCache.cs`,

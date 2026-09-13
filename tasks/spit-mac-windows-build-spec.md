@@ -455,6 +455,15 @@ build because §2 excluded it.
   dispatcher thread), and that thread never blocks for long.** When another thread or app calls `EmptyClipboard`
   while Spit owns the clipboard, Windows *sends* `WM_DESTROYCLIPBOARD` to Spit's window and waits for its thread;
   CI caught two clipboard tests deadlocking this way for 3 s. Clipboard tests run in one serial collection.
+- Capture uses NAudio 3.1's `WasapiRecorder` (`WasapiCapture` is `[Obsolete]`) on the Console-role default device,
+  and `WdlResampler` directly in input-driven mode — `WdlResamplingSampleProvider` zero-pads short reads, and every
+  live packet is one. The 20 s warm keep closes the device afterwards (WASAPI cannot re-initialise a stopped
+  client); `Start()` waits up to 3 s for capture to really run, so failure throws instead of "Listening" over silence.
+- `StreamingSession` computes voice energy from the samples in 100 ms frames, and resumes decoding by slicing audio at
+  the last confirmed segment end (WhisperKit takes a seek offset; whisper.cpp does not). Each poll copies the buffer,
+  as the Mac does — watch GC pressure on long dictations.
+- `MenuMask` injects `vkE8` from the dispatcher, not the hook callback; a Right Alt tap shorter than one dispatcher turn
+  could still reach a menu — spike S4 checks it.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 
