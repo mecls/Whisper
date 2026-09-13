@@ -174,21 +174,21 @@ only trust the boxes if they were ticked as the work happened.
   - [ ] 4.4 `Audio/AudioCapture.cs`: NAudio WASAPI capture → `WdlResamplingSampleProvider` → 16 kHz mono
         Float32 into `RingBuffer`, 20 s warm keep, default-device-change rebuild that keeps samples,
         `E_ACCESSDENIED` → blocked error (R22, R39)
-  - [ ] 4.5 `Inject/ClipboardSnapshot.cs` and `Inject/TextInjector.cs`: allowed memory formats ≤ 5 MB,
+  - [x] 4.5 `Inject/ClipboardSnapshot.cs` and `Inject/TextInjector.cs`: allowed memory formats ≤ 5 MB,
         `OpenClipboard` retry 10 ms up to 200 ms with Spit's HWND, text with
         `ExcludeClipboardContentFromMonitorProcessing`, Ctrl+V via `SendInput` 30 ms later, restore at
         1.5 s (R25, R32, R33)
-  - [ ] 4.6 `Platform/ElevationProbe.cs` and `Inject/ForegroundContext.cs`: elevation via
+  - [x] 4.6 `Platform/ElevationProbe.cs` and `Inject/ForegroundContext.cs`: elevation via
         `OpenProcessToken`/`TokenElevation` with access-denied = elevated; exe name + `FileDescription`,
         UWP child-window resolution, never the title (R30, R31)
-  - [ ] 4.7 `Asr/ModelManager.cs`: download to `.partial`, verify pinned SHA-256, rename; progress;
+  - [x] 4.7 `Asr/ModelManager.cs`: download to `.partial`, verify pinned SHA-256, rename; progress;
         storage under `%LOCALAPPDATA%\Miraside\Spit\models` (R5, R41)
-  - [ ] 4.8 `Asr/WhisperTranscriber.cs`: Whisper.net factory, temperature 0, language hint, prompt from
+  - [x] 4.8 `Asr/WhisperTranscriber.cs`: Whisper.net factory, temperature 0, language hint, prompt from
         dictionary terms with one retry without it, 1 s silence warm-up, one inference at a time behind a
         `SemaphoreSlim`, `asrModel = whisper.cpp/<file>` (R22, R41, R42)
   - [ ] 4.9 `Asr/StreamingTranscriber.cs`: the 100 ms poll / > 1 s new audio / all-but-last-2 loop over
         `StreamingPolicy`, finishing any pass before the tail pass (R22, R42)
-  - [ ] 4.10 `Storage/TokenStore.cs` (Credential Manager, target `co.miraside.voice:<server URL>`,
+  - [x] 4.10 `Storage/TokenStore.cs` (Credential Manager, target `co.miraside.voice:<server URL>`,
         `CRED_PERSIST_LOCAL_MACHINE`), `Storage/Settings.cs` (`settings.json`), `Storage/DictionaryCache.cs`,
         `Storage/AppPaths.cs`, `Storage/LaunchAtLogin.cs` (HKCU Run) (R5, R44)
   - [ ] 4.11 `App/Coordinator.cs`: wires hotkey → capture → gate → transcribe → refine → paste → report
