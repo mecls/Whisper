@@ -43,9 +43,10 @@ public sealed class PasteIntoNotepadTests
                 Assert.Equal("notepad.exe", context.BundleId);
                 Assert.False(string.IsNullOrWhiteSpace(context.Name));
 
+                var diagnostics = new StringBuilder();
+                diagnostics.Append($"before the paste: {GuiState(window)}; ");
                 var injector = new TextInjector(() => owner.Handle);
                 var result = Wait(injector.InsertAsync(Dictated, "notepad.exe"));
-                var diagnostics = new StringBuilder();
                 Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out var foregroundPid);
                 diagnostics.Append($"foreground after the paste: pid {foregroundPid} (Notepad pid {notepad.Id}); ");
                 Assert.Equal(InsertResult.Pasted, result);
@@ -117,8 +118,12 @@ public sealed class PasteIntoNotepadTests
         while (clock.Elapsed < TimeSpan.FromSeconds(5))
         {
             ShowWindow(window, 9);   // SW_RESTORE
-            // Windows lets a process take the foreground only right after input; a synthetic Alt tap is the usual way.
+            // Windows lets a process take the foreground only right after input. A bare Alt tap is the usual trick,
+            // but it leaves a classic Win32 menu bar in keyboard mode, which then swallows Ctrl+V — the first run of
+            // this test pasted nothing that way. Alt is masked with the unassigned vkE8, as `MenuMask` does (rule 35).
             keybd_event(0x12, 0, 0, 0);
+            keybd_event(0xE8, 0, 0, 0);
+            keybd_event(0xE8, 0, 2, 0);
             keybd_event(0x12, 0, 2, 0);
             SetForegroundWindow(window);
             Pump(TimeSpan.FromMilliseconds(300));
@@ -159,6 +164,34 @@ public sealed class PasteIntoNotepadTests
         }
         return "";
     }
+
+    /// Menu mode and the focused control of the window's GUI thread: a menu bar in keyboard mode eats Ctrl+V.
+    private static string GuiState(nint window)
+    {
+        var thread = Native.GetWindowThreadProcessId(window, out _);
+        var info = new GuiThreadInfo { Size = Marshal.SizeOf<GuiThreadInfo>() };
+        if (!GetGUIThreadInfo(thread, ref info)) return $"GetGUIThreadInfo failed ({Marshal.GetLastWin32Error()})";
+        var focus = new StringBuilder(256);
+        if (info.Focus != 0) GetClassName(info.Focus, focus, focus.Capacity);
+        return $"flags 0x{info.Flags:X} (menu mode {(info.Flags & 0x4) != 0}), focus '{focus}'";
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GuiThreadInfo
+    {
+        public int Size;
+        public int Flags;
+        public nint Active;
+        public nint Focus;
+        public nint Capture;
+        public nint MenuOwner;
+        public nint MoveSize;
+        public nint Caret;
+        public int CaretLeft, CaretTop, CaretRight, CaretBottom;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetGUIThreadInfo(uint idThread, ref GuiThreadInfo info);
 
     private static string ReadThroughAutomation(nint window, out string found)
     {
