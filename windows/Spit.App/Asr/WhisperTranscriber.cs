@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.IO;
-using System.Text;
 using System.Text.RegularExpressions;
 using Spit.Core;
 using Whisper.net;
@@ -11,8 +10,9 @@ namespace Spit.App;
 /// On-device Whisper through Whisper.net (rule 41), with WhisperKitTranscriber's decode rules:
 /// temperature 0 and no fallback to higher temperatures, the language hint or detection, dictionary
 /// terms as the prompt with one retry without it, and a 1 s warm-up after load. whisper.cpp can't run
-/// two decodes on one model instance, so every inference waits its turn (rule 42).
-public sealed partial class WhisperTranscriber : ITranscriber, IAsyncDisposable
+/// two decodes on one model instance, so every inference — one-pass, stream pass or tail — waits its
+/// turn on one lock (rule 42).
+public sealed partial class WhisperTranscriber : ISegmentTranscriber, IAsyncDisposable
 {
     public const int SampleRate = 16_000;
 
@@ -83,20 +83,47 @@ public sealed partial class WhisperTranscriber : ITranscriber, IAsyncDisposable
             var language = LanguageOrDetect(hint.Language);
             var prompt = PromptFor(hint.Vocabulary);
 
-            var (text, detected) = await DecodeAsync(loaded, samples, language, prompt, progress);
+            var (segments, detected) = await DecodeAsync(loaded, samples, language, prompt, progress, CancellationToken.None);
             var retried = false;
-            if (text.Length == 0 && prompt is not null)
+            if (segments.Count == 0 && prompt is not null)
             {
                 // Mac rule: with one temperature-0 attempt and nothing to fall back to, a vocabulary
                 // prompt can come back empty on real speech. Retry once without it rather than show
                 // "Nothing heard". No progress on the retry, so the bar never jumps backwards.
-                (text, detected) = await DecodeAsync(loaded, samples, language, prompt: null, progress: null);
+                (segments, detected) = await DecodeAsync(loaded, samples, language, prompt: null, progress: null, CancellationToken.None);
                 retried = true;
             }
 
+            var text = TextOf(segments);
             var ms = (int)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             Log.Info("asr", $"{samples.Length} samples to {text.Length} chars in {ms} ms{(retried ? ", retried without prompt" : "")}");
             return new Transcript(text, detected ?? language ?? "unknown", ms);
+        }
+        finally
+        {
+            inference.Release();
+        }
+    }
+
+    /// One stream pass: the same decode, with Whisper's segment times kept, relative to `samples`. The
+    /// streaming session logs each pass, so this does not.
+    public async Task<IReadOnlyList<StreamSegment>> TranscribeSegmentsAsync(float[] samples, TranscribeHint hint, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(samples);
+        ArgumentNullException.ThrowIfNull(hint);
+
+        await inference.WaitAsync(ct);
+        try
+        {
+            var loaded = factory ?? throw new InvalidOperationException("The speech model is not loaded.");
+            var language = LanguageOrDetect(hint.Language);
+            var prompt = PromptFor(hint.Vocabulary);
+            var (segments, _) = await DecodeAsync(loaded, samples, language, prompt, progress: null, ct);
+            if (segments.Count == 0 && prompt is not null)
+            {
+                (segments, _) = await DecodeAsync(loaded, samples, language, prompt: null, progress: null, ct);
+            }
+            return segments;
         }
         finally
         {
@@ -146,24 +173,29 @@ public sealed partial class WhisperTranscriber : ITranscriber, IAsyncDisposable
         return builder.Build();
     }
 
-    private static async Task<(string Text, string? Language)> DecodeAsync(WhisperFactory loaded, float[] samples, string? language, string? prompt, Action<double>? progress)
+    private static async Task<(List<StreamSegment> Segments, string? Language)> DecodeAsync(
+        WhisperFactory loaded, float[] samples, string? language, string? prompt, Action<double>? progress, CancellationToken ct)
     {
         await using var processor = Build(loaded, language, prompt, progress);
-        var text = new StringBuilder();
+        var segments = new List<StreamSegment>();
         string? detected = null;
-        await foreach (var segment in processor.ProcessAsync(samples, CancellationToken.None))
+        await foreach (var segment in processor.ProcessAsync(samples, ct))
         {
             if (detected is null && !string.IsNullOrEmpty(segment.Language)) detected = segment.Language;
-            if (!NonSpeechTag().IsMatch(segment.Text)) text.Append(segment.Text);
+            if (string.IsNullOrWhiteSpace(segment.Text) || NonSpeechTag().IsMatch(segment.Text)) continue;
+            segments.Add(new StreamSegment((float)segment.Start.TotalSeconds, (float)segment.End.TotalSeconds, segment.Text));
         }
-        return (text.ToString().Trim(), detected);
+        return (segments, detected);
     }
+
+    /// Whisper carries its own leading spaces, so segments are concatenated, not joined.
+    private static string TextOf(IEnumerable<StreamSegment> segments) => string.Concat(segments.Select(s => s.Text)).Trim();
 
     private static async Task WarmUpAsync(WhisperFactory loaded)
     {
         try
         {
-            await DecodeAsync(loaded, new float[SampleRate], "en", prompt: null, progress: null);
+            await DecodeAsync(loaded, new float[SampleRate], "en", prompt: null, progress: null, CancellationToken.None);
         }
         catch (Exception e)
         {

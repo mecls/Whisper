@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using Spit.Core;
 
 namespace Spit.App;
 
@@ -35,19 +36,14 @@ public sealed class TextInjector
     }
 
     /// Spit's executable name in `ForegroundContext`'s form (`spit.exe`).
-    public static string OwnExecutable { get; } = Path.GetFileName(Environment.ProcessPath ?? "Spit.exe").ToLowerInvariant();
+    public static string OwnExecutable => PasteRouting.OwnBundleId;
 
-    /// The Mac's `mustUseClipboard` with rule 34's Windows cases. Elevation wins for every target, as
-    /// secure input does on the Mac. An unknown target pastes: reading "I don't know which app" as "it
-    /// might be Spit" would send ordinary dictations to the clipboard for no reason the user could see.
-    // TODO(merge): use Spit.Core.PasteRouting
+    /// `PasteRouting.MustUseClipboard`, with the reason kept so the bar can say which one applied.
+    /// Elevation wins for every target, as secure input does on the Mac.
     public static PasteRoute Route(string? targetExe, bool targetElevated)
     {
-        if (targetElevated) return PasteRoute.ClipboardOnlyElevated;
-        if (targetExe is null) return PasteRoute.Paste;
-        return string.Equals(targetExe, OwnExecutable, StringComparison.OrdinalIgnoreCase)
-            ? PasteRoute.ClipboardOnlySelf
-            : PasteRoute.Paste;
+        if (!PasteRouting.MustUseClipboard(targetExe, targetElevated)) return PasteRoute.Paste;
+        return targetElevated ? PasteRoute.ClipboardOnlyElevated : PasteRoute.ClipboardOnlySelf;
     }
 
     /// Completes when the most recently scheduled restore has run (or stood down). For quitting and tests.

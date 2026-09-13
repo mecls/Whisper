@@ -7,11 +7,20 @@ namespace Spit.App;
 /// 574 MB model or the user's settings with it (rule 5).
 public sealed class AppPaths
 {
-    private static readonly Lazy<AppPaths> DefaultPaths = new(() => new AppPaths(
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Miraside", "Spit")));
+    /// When set, replaces the data folder for the whole process. Only CI's `--smoke-test` step uses it, so the
+    /// runner's copy of the model is read from a temp folder instead of the real `%LOCALAPPDATA%`.
+    public const string DataDirVariable = "SPIT_DATA_DIR";
 
-    /// The real data folder.
+    private static readonly Lazy<AppPaths> DefaultPaths = new(() => new AppPaths(ResolveRoot(Environment.GetEnvironmentVariable(DataDirVariable))));
+
+    /// The real data folder, or `SPIT_DATA_DIR` when that is set.
     public static AppPaths Default => DefaultPaths.Value;
+
+    /// The root `Default` uses for a given value of `SPIT_DATA_DIR`; blank means unset.
+    public static string ResolveRoot(string? dataDirVariable) =>
+        string.IsNullOrWhiteSpace(dataDirVariable)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Miraside", "Spit")
+            : Path.GetFullPath(dataDirVariable);
 
     /// `root` is overridable so tests never touch the real data folder.
     public AppPaths(string root)

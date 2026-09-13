@@ -25,6 +25,17 @@ public sealed class AppPathsTests : IDisposable
     }
 
     [WindowsFact]
+    public void DataDirVariable_ReplacesTheRootOnlyWhenSet()
+    {
+        var real = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Miraside", "Spit");
+
+        Assert.Equal("SPIT_DATA_DIR", AppPaths.DataDirVariable);
+        Assert.Equal(Path.GetFullPath(temp.Path), AppPaths.ResolveRoot(temp.Path));
+        Assert.Equal(real, AppPaths.ResolveRoot(null));
+        Assert.Equal(real, AppPaths.ResolveRoot("  "));
+    }
+
+    [WindowsFact]
     public void Default_IsMirasideSpitUnderLocalAppData()
     {
         var expected = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Miraside", "Spit");

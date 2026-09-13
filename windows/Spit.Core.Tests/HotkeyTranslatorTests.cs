@@ -26,6 +26,27 @@ public sealed class HotkeyTranslatorTests
     }
 
     [Fact]
+    public void testHeldStateClearsOnForceReleaseAndTheNextRealKeyDownStartsANewPress()
+    {
+        // Ctrl+Alt+Del, a lock or a UAC prompt takes the hotkey's key-up to another desktop.
+        var p = new Pipeline(HotkeyChoice.RightCtrl);
+        Assert.Equal(HotkeyAction.Press, p.Feed(RightCtrlDown));
+        Assert.True(p.Translator.IsHotkeyDown);
+        Assert.Equal(HotkeyTranslator.VkRControl, p.Translator.VirtualKey);
+
+        var release = p.Translator.ForceRelease();
+        Assert.NotNull(release);
+        Assert.Equal(HotkeyAction.Release, p.Interpreter.Handle(release));
+        Assert.False(p.Translator.IsHotkeyDown);
+        Assert.Null(p.Translator.ForceRelease());
+
+        // Without the reset this key-down would read as autorepeat of the press whose key-up was lost.
+        Assert.Equal(HotkeyAction.Press, p.Feed(RightCtrlDown));
+        Assert.Equal(HotkeyAction.Release, p.Feed(RightCtrlUp));
+        Assert.Equal(HotkeyTranslator.VkRMenu, new HotkeyTranslator(HotkeyChoice.RightAlt).VirtualKey);
+    }
+
+    [Fact]
     public void testAutorepeatOfTheHeldHotkeyIsNotAnotherKey()
     {
         var p = new Pipeline(HotkeyChoice.RightCtrl);

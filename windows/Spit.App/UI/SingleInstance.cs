@@ -14,6 +14,8 @@ public sealed class SingleInstance : IDisposable
     public const string ActivateEventName = @"Local\co.miraside.voice.spit.activate";
 
     private readonly Dispatcher dispatcher;
+    private readonly string mutexName;
+    private readonly string activateEventName;
     private Mutex? mutex;
     private bool owned;
     private EventWaitHandle? activate;
@@ -21,9 +23,16 @@ public sealed class SingleInstance : IDisposable
     private bool disposed;
 
     /// Call on the UI thread: `Activated` is raised on this thread's dispatcher.
-    public SingleInstance()
+    public SingleInstance() : this(MutexName, ActivateEventName)
+    {
+    }
+
+    /// Tests use their own names, so they never meet a Spit that is really running.
+    internal SingleInstance(string mutexName, string activateEventName)
     {
         dispatcher = Dispatcher.CurrentDispatcher;
+        this.mutexName = mutexName;
+        this.activateEventName = activateEventName;
     }
 
     /// Raised on the UI thread when a second launch asked this instance to come forward.
@@ -36,8 +45,8 @@ public sealed class SingleInstance : IDisposable
         ObjectDisposedException.ThrowIf(disposed, this);
         if (owned) return true;
 
-        activate ??= new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
-        mutex ??= new Mutex(initiallyOwned: false, MutexName);
+        activate ??= new EventWaitHandle(false, EventResetMode.AutoReset, activateEventName);
+        mutex ??= new Mutex(initiallyOwned: false, mutexName);
         try
         {
             owned = mutex.WaitOne(TimeSpan.Zero, exitContext: false);

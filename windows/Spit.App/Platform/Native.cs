@@ -28,6 +28,14 @@ internal static unsafe partial class Native
     public const ushort VK_V = 0x56;
 
     public const int WH_KEYBOARD_LL = 13;
+    public const uint WM_QUIT = 0x0012;
+    public const uint WM_KEYDOWN = 0x0100;
+    public const uint WM_KEYUP = 0x0101;
+    public const uint WM_SYSKEYDOWN = 0x0104;
+    public const uint WM_SYSKEYUP = 0x0105;
+    public const uint WM_APP = 0x8000;
+    public const uint PM_NOREMOVE = 0x0000;
+
     public const int GWL_EXSTYLE = -20;
     public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 
@@ -88,6 +96,10 @@ internal static unsafe partial class Native
     [LibraryImport("user32.dll", SetLastError = true)]
     public static partial uint SendInput(uint cInputs, INPUT* pInputs, int cbSize);
 
+    /// The high bit is set while the key is physically down.
+    [LibraryImport("user32.dll")]
+    public static partial short GetAsyncKeyState(int vKey);
+
     // Windows, processes and tokens
 
     [LibraryImport("user32.dll")]
@@ -125,8 +137,26 @@ internal static unsafe partial class Native
 
     // Keyboard hook and its message loop (the hook itself is built in Platform/KeyboardHook.cs)
 
+    /// The hook callback's shape. Passed to `SetWindowsHookEx` as a function pointer, so the delegate must be
+    /// kept alive by its owner for as long as the hook is installed.
+    public delegate nint LowLevelKeyboardProc(int nCode, nint wParam, nint lParam);
+
     [LibraryImport("user32.dll", EntryPoint = "SetWindowsHookExW", SetLastError = true)]
     public static partial nint SetWindowsHookEx(int idHook, nint lpfn, nint hmod, uint dwThreadId);
+
+    [LibraryImport("user32.dll", EntryPoint = "PeekMessageW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PeekMessage(out MSG lpMsg, nint hWnd, uint wMsgFilterMin, uint wMsgFilterMax, uint wRemoveMsg);
+
+    [LibraryImport("kernel32.dll")]
+    public static partial uint GetCurrentThreadId();
+
+    [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint GetModuleHandle(string? lpModuleName);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AllocConsole();
 
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -203,6 +233,16 @@ internal static unsafe partial class Native
         public uint uMsg;
         public ushort wParamL;
         public ushort wParamH;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KBDLLHOOKSTRUCT
+    {
+        public uint vkCode;
+        public uint scanCode;
+        public uint flags;
+        public uint time;
+        public nuint dwExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]

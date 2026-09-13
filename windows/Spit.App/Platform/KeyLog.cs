@@ -19,7 +19,7 @@ public static class KeyLog
 
     public static int Run()
     {
-        if (!HookInterop.AllocConsole())
+        if (!Native.AllocConsole())
         {
             // Already attached to one (started from a terminal that gave us its console): print there.
             HookLog.Info("key-log", $"AllocConsole failed: error {Marshal.GetLastPInvokeError()}");

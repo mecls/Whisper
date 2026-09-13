@@ -18,13 +18,14 @@ namespace Spit.App;
 public sealed class KeyboardHook : IDisposable
 {
     private const string Category = "hotkey";
-    private const uint ReinstallMessage = HookInterop.WM_APP + 1;
+    private const uint ReinstallMessage = Native.WM_APP + 1;
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(2);
 
     private readonly SynchronizationContext context;
-    // Held for the life of this object: native code keeps only a function pointer, and a collected
+    // Held for the life of this object: native code keeps only the function pointer, and a collected
     // delegate turns the next key press into a crash.
-    private readonly HookInterop.LowLevelKeyboardProc proc;
+    private readonly Native.LowLevelKeyboardProc proc;
+    private readonly nint procPointer;
     private readonly SendOrPostCallback drain;
     private readonly ConcurrentQueue<RawKeyEvent> pending = new();
     private readonly Lock gate = new();
@@ -42,6 +43,7 @@ public sealed class KeyboardHook : IDisposable
     {
         this.context = context;
         proc = Callback;
+        procPointer = Marshal.GetFunctionPointerForDelegate(proc);
         drain = Drain;
     }
 
@@ -70,7 +72,7 @@ public sealed class KeyboardHook : IDisposable
         lock (gate)
         {
             if (thread is null) return;
-            if (!HookInterop.PostThreadMessageW(threadId, HookInterop.WM_QUIT, 0, 0))
+            if (!Native.PostThreadMessage(threadId, Native.WM_QUIT, 0, 0))
             {
                 HookLog.Error(Category, $"could not stop the keyboard hook thread: error {Marshal.GetLastPInvokeError()}");
             }
@@ -97,7 +99,7 @@ public sealed class KeyboardHook : IDisposable
             Volatile.Write(ref reinstallDone, done);
             try
             {
-                if (!HookInterop.PostThreadMessageW(threadId, ReinstallMessage, 0, 0))
+                if (!Native.PostThreadMessage(threadId, ReinstallMessage, 0, 0))
                 {
                     HookLog.Error(Category, $"could not ask for a hook re-install: error {Marshal.GetLastPInvokeError()}");
                     return false;
@@ -120,17 +122,17 @@ public sealed class KeyboardHook : IDisposable
 
     private void Run(ManualResetEventSlim ready)
     {
-        threadId = HookInterop.GetCurrentThreadId();
+        threadId = Native.GetCurrentThreadId();
         // A thread has no message queue until it asks for one, and PostThreadMessage to a thread without one
         // fails — Stop and Reinstall would then do nothing.
-        HookInterop.PeekMessageW(out _, 0, 0, 0, HookInterop.PM_NOREMOVE);
+        Native.PeekMessage(out _, 0, 0, 0, Native.PM_NOREMOVE);
         Install();
         ready.Set();
 
         while (true)
         {
             // The hook callback is called from inside this wait; the loop itself only sees our own messages.
-            var result = HookInterop.GetMessageW(out var msg, 0, 0, 0);
+            var result = Native.GetMessage(out var msg, 0, 0, 0);
             if (result == 0) break;
             if (result == -1)
             {
@@ -149,7 +151,7 @@ public sealed class KeyboardHook : IDisposable
 
     private void Install()
     {
-        hook = HookInterop.SetWindowsHookExW(HookInterop.WH_KEYBOARD_LL, proc, HookInterop.GetModuleHandleW(null), 0);
+        hook = Native.SetWindowsHookEx(Native.WH_KEYBOARD_LL, procPointer, Native.GetModuleHandle(null), 0);
         installed = hook != 0;
         if (installed) HookLog.Info(Category, "keyboard hook installed");
         else HookLog.Error(Category, $"SetWindowsHookEx failed: error {Marshal.GetLastPInvokeError()}");
@@ -158,7 +160,7 @@ public sealed class KeyboardHook : IDisposable
     private void Uninstall()
     {
         if (hook == 0) return;
-        if (!HookInterop.UnhookWindowsHookEx(hook))
+        if (!Native.UnhookWindowsHookEx(hook))
         {
             // Usually means Windows already removed it after a timeout; the handle is dead either way.
             HookLog.Error(Category, $"UnhookWindowsHookEx failed: error {Marshal.GetLastPInvokeError()}");
@@ -173,10 +175,10 @@ public sealed class KeyboardHook : IDisposable
         {
             if (nCode >= 0)
             {
-                var data = (HookInterop.KBDLLHOOKSTRUCT*)lParam;
+                var data = (Native.KBDLLHOOKSTRUCT*)lParam;
                 var message = (uint)wParam;
                 pending.Enqueue(new RawKeyEvent((int)data->vkCode, (int)data->scanCode, (int)data->flags,
-                    message is HookInterop.WM_KEYUP or HookInterop.WM_SYSKEYUP));
+                    message is Native.WM_KEYUP or Native.WM_SYSKEYUP, data->time));
                 // One post per burst, not per key: the dispatcher drains everything queued by then.
                 if (Interlocked.Exchange(ref drainScheduled, 1) == 0) context.Post(drain, null);
             }
@@ -187,7 +189,7 @@ public sealed class KeyboardHook : IDisposable
             // regardless. Counted here, logged from the dispatcher.
             Interlocked.Increment(ref callbackFailures);
         }
-        return HookInterop.CallNextHookEx(hook, nCode, wParam, lParam);
+        return Native.CallNextHookEx(hook, nCode, wParam, lParam);
     }
 
     private void Drain(object? _)

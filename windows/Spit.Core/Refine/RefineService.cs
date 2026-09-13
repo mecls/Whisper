@@ -33,7 +33,7 @@ public sealed class RefineService : IRefiner
     {
         var d = dictation;
         if (d.Raw is not { } raw) return new RefineResult.RawFallback(FallbackReason.Server);
-        var ctx = new RefineContext(d.App?.BundleId, d.App?.Name);
+        var ctx = RefineContext.For(d.App);
         var timing = new RefineTiming(d.AudioMs, d.AsrMs);
         var createdAt = d.StartedAt.ToUnixTimeMilliseconds();
         var languageSetting = _settings.Language;
@@ -145,7 +145,7 @@ public sealed class RefineService : IRefiner
 
     private DictationRequest Request(OutboxEntry e) =>
         new(e.ClientId.ToString("D"), e.Raw, e.Injected, e.Fallback, e.Mode, e.LanguageSetting, e.LanguageDetected,
-            new RefineContext(e.App?.BundleId, e.App?.Name), new RefineTiming(e.AudioMs, e.AsrMs),
+            RefineContext.For(e.App), new RefineTiming(e.AudioMs, e.AsrMs),
             AsrModel, _clientVersion, e.CreatedAt.ToUnixTimeMilliseconds())
         {
             Cleaned = e.Cleaned,

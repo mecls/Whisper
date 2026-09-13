@@ -44,18 +44,16 @@ public sealed class MenuMask
         e.VkCode == HotkeyTranslator.VkRMenu
         || (e.VkCode == HotkeyTranslator.VkMenu && (e.Flags & HotkeyTranslator.LlkhfExtended) != 0);
 
-    private static void Inject()
+    private static unsafe void Inject()
     {
-        HookInterop.INPUT[] inputs =
-        [
-            new() { type = HookInterop.INPUT_KEYBOARD, u = new() { ki = new() { wVk = VkMenuMask } } },
-            new() { type = HookInterop.INPUT_KEYBOARD, u = new() { ki = new() { wVk = VkMenuMask, dwFlags = HookInterop.KEYEVENTF_KEYUP } } },
-        ];
-        var sent = HookInterop.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<HookInterop.INPUT>());
-        if (sent != inputs.Length)
+        var inputs = stackalloc Native.INPUT[2];
+        inputs[0] = new() { type = Native.INPUT_KEYBOARD, u = new() { ki = new() { wVk = VkMenuMask } } };
+        inputs[1] = new() { type = Native.INPUT_KEYBOARD, u = new() { ki = new() { wVk = VkMenuMask, dwFlags = Native.KEYEVENTF_KEYUP } } };
+        var sent = Native.SendInput(2, inputs, sizeof(Native.INPUT));
+        if (sent != 2)
         {
             // Blocked by UIPI when an elevated window has focus; the menu may open, the dictation is unaffected.
-            HookLog.Error("hotkey", $"menu mask: SendInput sent {sent} of {inputs.Length}: error {Marshal.GetLastPInvokeError()}");
+            HookLog.Error("hotkey", $"menu mask: SendInput sent {sent} of 2: error {Marshal.GetLastPInvokeError()}");
         }
     }
 }

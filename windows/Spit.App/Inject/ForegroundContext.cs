@@ -36,11 +36,14 @@ public static class ForegroundContext
         return window == 0 ? null : ProcessIdOf(window);
     }
 
-    /// Null when the process can't be opened or its image name can't be read (logged).
+    /// Null when the process can't be opened or its image name can't be read (logged). Both fields are cut to
+    /// the server's 200-character cap: a FileDescription is free text, and an image name can run to 255.
     public static FrontmostApp? ForProcess(int processId)
     {
         var path = ExecutablePath(processId);
-        return path is null ? null : new FrontmostApp(Path.GetFileName(path).ToLowerInvariant(), Describe(path));
+        return path is null
+            ? null
+            : new FrontmostApp(RefineContext.Clamp(Path.GetFileName(path).ToLowerInvariant()), RefineContext.Clamp(Describe(path)));
     }
 
     private static string Describe(string path)

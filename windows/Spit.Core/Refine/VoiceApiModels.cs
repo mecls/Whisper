@@ -17,7 +17,21 @@ public static class SpitJson
     };
 }
 
-public sealed record RefineContext(string? AppBundleId, string? AppName);
+public sealed record RefineContext(string? AppBundleId, string? AppName)
+{
+    /// The server's cap on both fields (server/src/routes/schemas.ts). Longer is a 400, and a refused
+    /// `/v1/dictations` report stays in the outbox, replayed and refused again after every dictation.
+    public const int MaxLength = 200;
+
+    public static RefineContext For(FrontmostApp? app) => new(Clamp(app?.BundleId), Clamp(app?.Name));
+
+    /// Cut to `MaxLength` UTF-16 units — what the server's string length counts — never splitting a surrogate pair.
+    public static string? Clamp(string? value)
+    {
+        if (value is null || value.Length <= MaxLength) return value;
+        return value[..(char.IsHighSurrogate(value[MaxLength - 1]) ? MaxLength - 1 : MaxLength)];
+    }
+}
 
 public sealed record RefineTiming(int AudioMs, int AsrMs);
 

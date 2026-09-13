@@ -1,8 +1,9 @@
 namespace Spit.Core;
 
 /// What a WH_KEYBOARD_LL hook reports for one key event: `KBDLLHOOKSTRUCT.vkCode`, `.scanCode` and
-/// `.flags`, plus whether the message was WM_KEYUP/WM_SYSKEYUP.
-public readonly record struct RawKeyEvent(int VkCode, int ScanCode, int Flags, bool IsKeyUp);
+/// `.flags`, whether the message was WM_KEYUP/WM_SYSKEYUP, and `.time` — the GetTickCount millisecond the
+/// key really moved (0 when unknown), which `KeyEventClock` turns into gesture time.
+public readonly record struct RawKeyEvent(int VkCode, int ScanCode, int Flags, bool IsKeyUp, uint Time = 0);
 
 /// Turns raw hook events into the `KeyEvent`s `HotkeyInterpreter` understands, for one chosen hotkey
 /// (prd-spit-mac-windows.md rules 27, 28). Windows-only in meaning, but pure: no Win32 here, so the
@@ -33,6 +34,19 @@ public sealed class HotkeyTranslator
 
     /// Whether the chosen hotkey is physically down, as far as the events seen so far say.
     public bool IsHotkeyDown { get; private set; }
+
+    /// The right-hand virtual key the choice means, for asking Windows whether it is still down.
+    public int VirtualKey => Choice == HotkeyChoice.RightAlt ? VkRMenu : VkRControl;
+
+    /// The hotkey's key-up never arrived but the key is no longer down: Ctrl+Alt+Del, locking the PC or a UAC
+    /// prompt moves input to another desktop and the key-up goes with it. Returns the release the interpreter
+    /// is owed, or null when nothing was held; either way the next real key-down is a new press, not autorepeat.
+    public KeyEvent? ForceRelease()
+    {
+        if (!IsHotkeyDown) return null;
+        IsHotkeyDown = false;
+        return new KeyEvent.Flags(RightCtrl: false, RightAlt: false);
+    }
 
     public KeyEvent? Translate(RawKeyEvent e)
     {

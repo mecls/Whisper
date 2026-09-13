@@ -31,6 +31,18 @@ public static class Log
     public static void Failure(string area, string what, Exception exception) =>
         Write("error", area, string.Create(CultureInfo.InvariantCulture, $"{what} failed: {exception.GetType().Name} (0x{exception.HResult:X8})"));
 
+    /// An exception nobody caught: its type, HRESULT and stack for each exception in the chain — code
+    /// locations only, never the messages, which can quote whatever the failing call was handed.
+    public static void Crash(string area, string what, Exception exception)
+    {
+        var text = new StringBuilder(string.Create(CultureInfo.InvariantCulture, $"{what}:"));
+        for (Exception? e = exception; e is not null; e = e.InnerException)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"{Environment.NewLine}  {e.GetType().FullName} (0x{e.HResult:X8}){Environment.NewLine}{e.StackTrace}");
+        }
+        Write("fatal", area, text.ToString());
+    }
+
     private static void Write(string level, string area, string message)
     {
         var now = DateTimeOffset.Now;

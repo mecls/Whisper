@@ -111,18 +111,12 @@ public sealed class AudioCapture : IDisposable
 
         buffer.Drain();
         Interlocked.Exchange(ref capSignalled, 0);
+        // Throws with nothing marked as capturing when the device will not run.
+        if (current.Recorder.CaptureState != CaptureState.Capturing) StartRecorder(current);
+        // Stamped once the device runs, as the Mac stamps after `engine.start()`. A cold start counted as recording
+        // inflates `audioMs`, and makes the stream tail's silence guard read a silent gap as worth a pass.
         startedAt = time.GetTimestamp();
         capturing = true;
-        if (current.Recorder.CaptureState == CaptureState.Capturing) return;
-        try
-        {
-            StartRecorder(current);
-        }
-        catch
-        {
-            capturing = false;
-            throw;
-        }
     }
 
     public (float[] samples, int ms) Stop()
