@@ -164,7 +164,7 @@ only trust the boxes if they were ticked as the work happened.
         count equals the C# `[Fact]` count in the same-named class, and the names match; run it
   - [x] 3.12 `dotnet test windows/Spit.Core.Tests` passes on the Mac
 - [ ] 4.0 `Spit.App` platform layer
-  - [ ] 4.1 Create `windows/Spit.App/Spit.App.csproj` (`net10.0-windows`, `UseWPF`, `win-x64`,
+  - [x] 4.1 Create `windows/Spit.App/Spit.App.csproj` (`net10.0-windows`, `UseWPF`, `win-x64`,
         `AssemblyName` `Spit`, `ApplicationManifest` asInvoker) with the R24 packages, a hand-written
         `Program.Main` whose first line is `VelopackApp.Build().Run()`, and `App.xaml` as Page (R44)
   - [x] 4.2 `Platform/KeyboardHook.cs`: `WH_KEYBOARD_LL` on a dedicated thread with its own message
@@ -191,7 +191,7 @@ only trust the boxes if they were ticked as the work happened.
   - [x] 4.10 `Storage/TokenStore.cs` (Credential Manager, target `co.miraside.voice:<server URL>`,
         `CRED_PERSIST_LOCAL_MACHINE`), `Storage/Settings.cs` (`settings.json`), `Storage/DictionaryCache.cs`,
         `Storage/AppPaths.cs`, `Storage/LaunchAtLogin.cs` (HKCU Run) (R5, R44)
-  - [ ] 4.11 `App/Coordinator.cs`: wires hotkey → capture → gate → transcribe → refine → paste → report
+  - [x] 4.11 `App/Coordinator.cs`: wires hotkey → capture → gate → transcribe → refine → paste → report
         exactly like `Coordinator.swift`, with the 1.2 s return-to-idle and 60 s pre-warm
 - [ ] 5.0 `Spit.App` user interface
   - [x] 5.1 `UI/TrayIcon.cs`: H.NotifyIcon with the four `menuIcon` states and the R37 menu order
@@ -206,7 +206,7 @@ only trust the boxes if they were ticked as the work happened.
   - [x] 5.8 `Assets/start.wav`, `Assets/stop.wav` generated in-repo (original tones) and played with a
         preloaded `SoundPlayer`; `Assets/Spit.ico` from `mac/branding`
   - [x] 5.9 Single instance: named mutex `Local\co.miraside.voice.spit` plus an activation message (R36)
-  - [ ] 5.10 `--smoke-test` mode: start every service without the UI loop, load the model if present,
+  - [x] 5.10 `--smoke-test` mode: start every service without the UI loop, load the model if present,
         transcribe a WAV passed on the command line, write `smoke.json`, exit 0/1 — used only by CI
 - [ ] 6.0 Windows installer and CI
   - [ ] 6.1 `windows/scripts/pack.ps1`: `dotnet publish -c Release -r win-x64 --self-contained`, then

@@ -477,6 +477,23 @@ build because §2 excluded it.
 - Gatekeeper check on a Safari-quarantined copy of `Spit.dmg`: `spctl` rejects the app (origin "Apple Development:
   Miguel Carvalhal", not notarised) — exactly the "Apple could not verify…" → Open Anyway path rule 15 documents. The
   disk image itself is left unsigned: signing a DMG without notarisation changes no dialog a friend sees.
+- Esc or a key chord while holding the hotkey **discards** the recording on Windows; the Mac's cancel leaves its microphone
+  open until the 90 s cap — a Mac bug not worth porting.
+- A lost hotkey key-up (Ctrl+Alt+Del, lock, UAC — the secure desktop swallows it) is recovered by polling
+  `GetAsyncKeyState` every 100 ms while the hotkey is held and re-checking on session switch and resume; without it the
+  dictation records to the 90 s cap and pastes. Found by review, not yet exercised on a PC.
+- `RawKeyEvent` carries the hook's event time and `KeyEventClock` maps it to gesture time, so a tap handled late (a cold
+  microphone blocks the dispatcher while it starts) still reads as a tap and can latch. Found by review.
+- `AudioCapture` stamps the recording start after the device is running (as the Mac does); stamping before inflated
+  `audioMs` on cold starts and defeated `StreamTail`'s silence guard. Found by review, proven by a scratch run.
+- `RefineContext` clamps `appBundleId`/`appName` to 200 UTF-16 units (the server's cap) without splitting a surrogate —
+  an over-long FileDescription would otherwise 400 and loop in the outbox. Found by review.
+- The Coordinator runs launch and 600 s syncs itself (not `SyncService.Start`) so Set-up's "Checking…" always resolves;
+  every Whisper call runs on the thread pool; the clipboard owner is a message-only window on the UI thread.
+- An invalid `serverURL` in `settings.json` falls back to the default server with a log line; a failure to create the
+  single-instance mutex runs Spit anyway with a log line (a second hook is a smaller harm than no Spit).
+- CI's install check launches `current\Spit.exe` and also the root launcher, then asserts exactly one Spit process —
+  Velopack's root `Spit.exe` is a launcher that exits.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

@@ -119,30 +119,46 @@ jobs:
 
           $p = Start-Process -FilePath $setup -ArgumentList '--silent' -PassThru -Wait
           "setup exit $($p.ExitCode)"
-          $exe = Join-Path $install 'Spit.exe'
-          for ($i = 0; $i -lt 60 -and -not (Test-Path $exe); $i++) { Start-Sleep 1 }
+          # Velopack installs a stable launcher at the root and the real app under current\. The launcher starts
+          # the app and exits, so process checks must watch current\Spit.exe, not the launcher.
+          $stub = Join-Path $install 'Spit.exe'
+          $exe = Join-Path $install 'current\Spit.exe'
+          for ($i = 0; $i -lt 60 -and -not (Test-Path $stub); $i++) { Start-Sleep 1 }
+          if (-not (Test-Path $stub)) { throw "$stub was not installed" }
           if (-not (Test-Path $exe)) { throw "$exe was not installed" }
           if (-not (Test-Path (Join-Path $install 'Update.exe'))) { throw 'Velopack Update.exe missing' }
+          Get-ChildItem $install | Format-Table Name, Length
 
           Get-Process Spit -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep 2
           $app = Start-Process -FilePath $exe -PassThru
           Start-Sleep 15
           $app.Refresh()
           if ($app.HasExited) { throw "Spit exited after start with code $($app.ExitCode)" }
+          if (-not (Test-Path $data)) { throw "$data was not created by the running app" }
 
           $second = Start-Process -FilePath $exe -PassThru
           if (-not $second.WaitForExit(10000)) { throw 'a second Spit did not exit within 10 s (single instance broken)' }
           "second instance exit $($second.ExitCode)"
           if ($second.ExitCode -ne 0) { throw "second instance exited with $($second.ExitCode)" }
-          $app.Refresh()
-          if ($app.HasExited) { throw 'the first Spit exited when the second launched' }
-          if (-not (Test-Path $data)) { throw "$data was not created by the running app" }
 
-          Stop-Process -Id $app.Id -Force
+          # The launcher path friends use (Start menu, desktop, Run key) must also end in one instance.
+          Start-Process -FilePath $stub | Out-Null
+          Start-Sleep 8
+          $app.Refresh()
+          if ($app.HasExited) { throw 'the first Spit exited when another launched' }
+          $running = @(Get-Process Spit -ErrorAction SilentlyContinue)
+          "Spit processes after launcher: $($running.Count)"
+          if ($running.Count -ne 1) { throw "expected one Spit process, found $($running.Count)" }
+
+          $log = Get-ChildItem (Join-Path $data 'logs') -Filter *.log -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($log) { '--- app log ---'; Get-Content $log.FullName -Tail 40 }
+
+          Get-Process Spit -ErrorAction SilentlyContinue | Stop-Process -Force
           Start-Sleep 2
           $u = Start-Process -FilePath (Join-Path $install 'Update.exe') -ArgumentList @('--uninstall', '--silent') -PassThru -Wait
           "uninstall exit $($u.ExitCode)"
-          for ($i = 0; $i -lt 30 -and (Test-Path $exe); $i++) { Start-Sleep 1 }
-          if (Test-Path $exe) { throw 'Spit.exe is still installed after uninstall' }
+          for ($i = 0; $i -lt 30 -and ((Test-Path $exe) -or (Test-Path $stub)); $i++) { Start-Sleep 1 }
+          if ((Test-Path $exe) -or (Test-Path $stub)) { throw 'Spit is still installed after uninstall' }
           if (-not (Test-Path $data)) { throw "uninstall removed $data (rule 5)" }
           'install/uninstall OK'
