@@ -174,7 +174,7 @@ public sealed partial class WhisperTranscriber : ISegmentTranscriber, IAsyncDisp
     {
         backendLogger ??= LogProvider.AddLogger((_, message) =>
         {
-            if (!IsBackendLine(message) || backendLines.Count >= 40) return;
+            if (message is null || !IsBackendLine(message) || backendLines.Count >= 40) return;
             var line = message.Trim();
             backendLines.Enqueue(line);
             Log.Info("asr", line);
@@ -189,8 +189,9 @@ public sealed partial class WhisperTranscriber : ISegmentTranscriber, IAsyncDisp
 
     private static readonly string[] BackendPrefixes = ["ggml_", "whisper_backend", "whisper_init", "whisper_model_load", "load_backend", "register_backend"];
 
-    private static bool IsBackendLine(string message)
+    private static bool IsBackendLine(string? message)
     {
+        if (message is null) return false;
         var trimmed = message.TrimStart();
         return BackendPrefixes.Any(prefix => trimmed.StartsWith(prefix, StringComparison.Ordinal));
     }
