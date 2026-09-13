@@ -30,6 +30,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - name: VERSION agrees with mac/project.yml
@@ -47,6 +48,9 @@ jobs:
   app:
     needs: core
     runs-on: windows-latest
+    # A hung app (a smoke test that never exits, an installer waiting on a dialog) must fail the run, not
+    # hold a runner for GitHub's six-hour default.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v5
@@ -85,6 +89,7 @@ jobs:
           Invoke-WebRequest "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$env:MODEL_FILE" -OutFile (Join-Path $dir $env:MODEL_FILE)
 
       - name: Smoke test — transcribe a fixture with the published app
+        timeout-minutes: 20
         shell: pwsh
         run: |
           $model = Join-Path $env:RUNNER_TEMP "spit-model\$env:MODEL_FILE"
@@ -104,6 +109,7 @@ jobs:
           "| model | runtime | audio ms | transcribe ms |`n|---|---|---|---|`n| $($r.asrModel) | $($r.runtime) | $($r.audioMs) | $($r.transcribeMs) |" >> $env:GITHUB_STEP_SUMMARY
 
       - name: Install, run, second instance, uninstall
+        timeout-minutes: 10
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
