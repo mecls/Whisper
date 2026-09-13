@@ -166,7 +166,10 @@ public sealed class TrayIcon : IDisposable
             }
         }
         if (image is null) return;
-        icon.Icon = image;
+        // A copy, never the cached icon: H.NotifyIcon disposes the previous `Icon` whenever a new one is set, so
+        // handing it a cached instance breaks the next time that state comes back (listening → idle → listening
+        // threw ObjectDisposedException in CI). Each copy is disposed by the library when it is replaced.
+        icon.Icon = (System.Drawing.Icon)image.Clone();
         shownState = state;
         shownLightTaskbar = light;
     }

@@ -521,6 +521,10 @@ build because §2 excluded it.
   the dictation in flight instead of disposing its transcriber. (6) `SHA256SUMS.txt` has one format whichever side
   uploads last. (7) The tray status line says "Token invalid — open Settings" while the token is refused, and a sync in
   flight at Sign out no longer restores the name.
+- **The tray hands H.NotifyIcon a copy of each cached icon.** `TaskbarIcon.OnIconChanged` disposes the previous `Icon`
+  (H.NotifyIcon v2.4.1 source), so assigning cached instances threw `ObjectDisposedException` the first time a state
+  came back — the new whole-UI test caught it on its first CI run (Hud Listening → Message); in the app the tray icon
+  would have stuck after the first dictation.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 
