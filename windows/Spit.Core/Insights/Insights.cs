@@ -5,7 +5,9 @@ namespace Spit.Core;
 // Numbers only, by design — the server never selects `raw` or `cleaned` for this endpoint, so no
 // transcript text can reach this type or the cache file it is written to (rule 25).
 
-public sealed record InsightsTotals(int Dictations, int Words, int AudioMs, int? Wpm);
+/// `AudioMs` is 64-bit like Swift's `Int`: an all-history total passes `int.MaxValue` at ~596 hours of
+/// audio, and an `int` would turn every refresh after that into a decoding error.
+public sealed record InsightsTotals(int Dictations, int Words, long AudioMs, int? Wpm);
 
 public sealed record InsightsStreak(int Current, int Longest);
 
