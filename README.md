@@ -37,7 +37,8 @@ A Sintra Labs Open Source dictation app for macOS: hold a hotkey, speak, release
 
 - **Server:** live on the VPS (vps) behind Traefik; HTTPS for `voice.miraside.co` is live (Let’s Encrypt via Traefik).
 - **Mac app:** built through M5 and signed with an Apple Development identity (team `FZC6P6XRGD`). The designated requirement stays constant across rebuilds, which is what stops macOS re-asking for Accessibility, Input Monitoring and Microphone every time — `mac/scripts/package.sh` fails loudly rather than quietly falling back to ad-hoc signing.
-- **Tests:** 137 Mac unit tests and 81 server tests; 1 opt-in ASR integration test (`VOICE_ASR_TESTS=1`) — everything requiring a microphone or a permission grant is in the manual checklist below.
+- **Tests:** 143 Mac unit tests and 81 server tests; 1 opt-in ASR integration test (`VOICE_ASR_TESTS=1`) — everything requiring a microphone or a permission grant is in the manual checklist below.
+- **Windows client:** `windows/` — 198 platform-neutral tests (108 of them the Mac's, ported by name) plus Windows-only tests, a smoke test that transcribes a fixture with the real model, and an install/uninstall check, all in CI on a Windows runner. Not yet run on a physical PC: see `tasks/tasks-spit-mac-windows.md` for the (PC) checklist.
 
 ## Install for teammates
 
