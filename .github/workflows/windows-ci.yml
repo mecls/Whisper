@@ -119,16 +119,30 @@ jobs:
             $norm = { param($t) @(($t.ToLowerInvariant() -replace '[^\p{L}\p{N}\s]', '') -split '\s+' | Where-Object { $_ }) }
             $once = & $norm $r.text
             $live = & $norm $r.streamedText
-            $pairs = @{}
-            for ($k = 0; $k + 1 -lt $once.Count; $k++) { if ($once[$k] -eq $once[$k + 1]) { $pairs[$once[$k]] = $true } }
-            for ($k = 0; $k + 1 -lt $live.Count; $k++) {
-              if ($live[$k] -eq $live[$k + 1] -and -not $pairs.ContainsKey($live[$k])) { $failures += "${runtime}: live text repeats '$($live[$k])'" }
+            # Any phrase of 1-5 words said twice back to back ("on Convex on Convex") that the one pass does not have:
+            # a failed stitch repeats the ~1.5 s overlap, three or four words — an earlier check compared single words
+            # only and passed exactly those.
+            $doubledIn = {
+              param([string[]] $w)
+              $found = @{}
+              for ($n = 1; $n -le 5; $n++) {
+                for ($k = 0; $k + 2 * $n -le $w.Count; $k++) {
+                  $a = $w[$k..($k + $n - 1)] -join ' '
+                  $b = $w[($k + $n)..($k + 2 * $n - 1)] -join ' '
+                  if ($a -eq $b) { $found[$a] = $true }
+                }
+              }
+              $found
+            }
+            $onceDoubled = & $doubledIn $once
+            foreach ($phrase in (& $doubledIn $live).Keys) {
+              if (-not $onceDoubled.ContainsKey($phrase)) { $failures += "${runtime}: live text repeats '$phrase'" }
             }
             $n = [Math]::Min(3, $once.Count)
             $liveOpening = ($live | Select-Object -First $n) -join ' '
             $onceOpening = ($once | Select-Object -First $n) -join ' '
             if ($liveOpening -ne $onceOpening) { $failures += "${runtime}: live text opens '$liveOpening', one pass '$onceOpening'" }
-            if ($live.Count -gt $once.Count + 3) { $failures += "${runtime}: live text has $($live.Count) words, one pass $($once.Count)" }
+            if ($live.Count -gt $once.Count + 2) { $failures += "${runtime}: live text has $($live.Count) words, one pass $($once.Count)" }
             if ($r.streamedText -notmatch 'mira|convex|olama') { $failures += "${runtime}: live text lacks the fixture's words" }
           }
           if ($failures.Count -gt 0) { throw ($failures -join '; ') }
@@ -156,6 +170,9 @@ jobs:
 
           Get-Process Spit -ErrorAction SilentlyContinue | Stop-Process -Force
           Start-Sleep 2
+          # Earlier steps on this runner (the Windows-only tests, Velopack's post-install launch) may already have
+          # written a log, a "ready" line or the data folder itself; every check below must see only this launch.
+          Remove-Item -Recurse -Force $data -ErrorAction SilentlyContinue
           $app = Start-Process -FilePath $exe -PassThru
           Start-Sleep 15
           $app.Refresh()

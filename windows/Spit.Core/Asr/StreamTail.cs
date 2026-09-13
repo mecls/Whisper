@@ -40,25 +40,22 @@ public static class StreamTail
         return samples[Index(Math.Max(0, afterMs - OverlapMs))..];
     }
 
-    /// The coverage the tail pass should start from. A stream holding fewer words than `Stitch` needs to find a
-    /// seam cannot be stitched however much audio it covered, so it counts as covering nothing: the tail pass then
-    /// transcribes the whole recording and `Combine` uses it alone. Without this, a two-word stream covering
-    /// 1.6 s pasted "Hi Joel, Hi Joel, quick update…" and one covering 2.4 s pasted "Hi Joel, Joel, …" (third review).
-    public static int EffectiveCoveredMs(string streamed, int coveredMs) =>
-        streamed.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length < Stitch.MinimumAnchor ? 0 : coveredMs;
-
-    /// The dictation's text from the stream and the tail pass over `Tail`'s audio; pass the coverage from
-    /// `EffectiveCoveredMs` to both.
+    /// The dictation's text from the streamed transcript and a tail pass over `Tail(samples, coveredMs, …)`, or null
+    /// when only a transcription of the whole recording can be trusted.
     ///
-    /// When the stream covered no more than `OverlapMs`, the tail pass started at the first sample: it is a
-    /// transcription of the whole recording, so it replaces the streamed text rather than being stitched to
-    /// it. Stitching there cannot work — the stream holds too few words for `Stitch` to find a seam, so it
-    /// appends, and every word the stream heard is pasted twice. A Windows CI smoke run pasted "Hi Joel Hi
-    /// Joel, quick update…" exactly this way: on a slow machine the stream had confirmed two words when the
-    /// key came up.
-    public static string Combine(string streamed, int coveredMs, string tail)
+    /// - A blank tail keeps the streamed text.
+    /// - When the stream covered no more than `OverlapMs`, the tail pass started at the first sample: it is the whole
+    ///   recording, so it replaces the stream.
+    /// - When `Stitch` finds the seam, the stitched text.
+    /// - Otherwise null. Appending, the Mac's rule, pastes whatever the tail's overlap heard again — "Hi Joel Hi Joel,
+    ///   quick update…" in a CI smoke run, "Hi Joel, quick Joel, quick update…" in review — and text cannot tell that
+    ///   apart from a tail of genuinely new speech, so the caller transcribes the whole recording instead. That costs
+    ///   the wait live transcription saves, but only when no seam exists; a stream that covered the recording never
+    ///   gets here, because `Tail` returns null for it.
+    public static string? Combine(string streamed, int coveredMs, string tail)
     {
         if (string.IsNullOrWhiteSpace(tail)) return streamed.Trim();
-        return coveredMs <= OverlapMs ? tail.Trim() : Stitch.Join(streamed, tail);
+        if (coveredMs <= OverlapMs) return tail.Trim();
+        return Stitch.TryJoin(streamed, tail, out var joined) ? joined : null;
     }
 }

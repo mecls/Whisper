@@ -23,12 +23,30 @@ public static class Stitch
     /// Below this a match is coincidence, and a false seam deletes every word between it and the real one.
     internal const int MinimumAnchor = 3;
 
+    /// The Mac's rule: the stitched text, or the tail appended when no seam is found.
     public static string Join(string streamed, string tail)
+    {
+        TryJoin(streamed, tail, out var joined);
+        return joined;
+    }
+
+    /// `Join`, reporting whether a seam was found (or one side was empty). False means `joined` is the tail simply
+    /// appended — right when the tail is new speech, a duplication of the overlap when it is not. Text alone cannot
+    /// tell those apart, which is why the Windows client re-transcribes instead of appending (`StreamTail.Combine`).
+    public static bool TryJoin(string streamed, string tail, out string joined)
     {
         var s = streamed.Trim();
         var t = tail.Trim();
-        if (t.Length == 0) return s;
-        if (s.Length == 0) return t;
+        if (t.Length == 0)
+        {
+            joined = s;
+            return true;
+        }
+        if (s.Length == 0)
+        {
+            joined = t;
+            return true;
+        }
 
         var sWords = s.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var tWords = t.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -37,7 +55,6 @@ public static class Stitch
         // Capped by both sides: capping only by the tail misses the seam whenever the tail is the
         // longer of the two (the stream produced almost nothing but a hallucination).
         var longest = Math.Min(AnchorWords, Math.Min(tWords.Length, sWords.Length));
-        if (longest < MinimumAnchor) return s + " " + t;
 
         // Longest anchor first; shorter anchors are a fallback, because the tail's opening words can
         // run past the seam.
@@ -50,12 +67,14 @@ public static class Stitch
                 if (sKeys.AsSpan(start, length).SequenceEqual(anchor))
                 {
                     var kept = string.Join(' ', sWords.Take(start));
-                    return kept.Length == 0 ? t : kept + " " + t;
+                    joined = kept.Length == 0 ? t : kept + " " + t;
+                    return true;
                 }
             }
         }
 
-        // No overlap found: the tail really is new speech, which is what this pass exists for.
-        return s + " " + t;
+        // No overlap found: on the Mac the tail really is new speech, which is what this pass exists for.
+        joined = s + " " + t;
+        return false;
     }
 }

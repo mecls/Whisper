@@ -1,25 +1,19 @@
 namespace Spit.Core.Tests;
 
-/// `StreamTail.Combine`: a Windows-only rule, so it lives outside the ported `StreamTailTests`.
+/// `StreamTail.Combine` and `Stitch.TryJoin`: Windows-only rules, so they live outside the ported classes.
 public sealed class StreamTailCombineTests
 {
     [Fact]
-    public void AStreamThatCoveredLessThanTheOverlapIsReplacedByTheTail()
+    public void AStreamThatCoveredNoMoreThanTheOverlapIsReplacedByTheTail()
     {
         // The CI smoke run: two streamed words, then a tail pass from the first sample.
-        var text = StreamTail.Combine("Hi Joel", coveredMs: 1200, "Hi Joel, quick update. The dashboard is running.");
-
-        Assert.Equal("Hi Joel, quick update. The dashboard is running.", text);
-    }
-
-    [Fact]
-    public void AStreamCoveringExactlyTheOverlapIsStillReplaced()
-    {
+        Assert.Equal("Hi Joel, quick update. The dashboard is running.",
+            StreamTail.Combine("Hi Joel", coveredMs: 1200, "Hi Joel, quick update. The dashboard is running."));
         Assert.Equal("one two three", StreamTail.Combine("one", StreamTail.OverlapMs, "one two three"));
     }
 
     [Fact]
-    public void AStreamPastTheOverlapIsStitchedAtTheSeam()
+    public void ASeamFoundInTheTextIsStitched()
     {
         var text = StreamTail.Combine(
             "we should ship the build on friday after the review",
@@ -32,47 +26,43 @@ public sealed class StreamTailCombineTests
     [Fact]
     public void AnEmptyTailKeepsTheStreamedText()
     {
-        Assert.Equal("Hi Joel", StreamTail.Combine(" Hi Joel ", coveredMs: 900, "  "));
+        Assert.Equal("Hi Joel", StreamTail.Combine(" Hi Joel ", coveredMs: 2400, "  "));
     }
 
     [Theory]
-    [InlineData(1501)]
-    [InlineData(1600)]
-    [InlineData(2400)]
-    [InlineData(9000)]
-    public void AStreamTooShortToStitchCountsAsCoveringNothing(int coveredMs)
+    [InlineData("Hi Joel,", 2400, "Hi Joel, quick update.")]                       // too few words to anchor
+    [InlineData("Hi Joel, quick", 2400, "Joel, quick update. The dashboard")]      // three words, no seam
+    [InlineData("Hi Joel, quick update.", 2600, "quick update. The dashboard is")] // four words, no seam
+    public void WithoutASeamOnlyAWholeRecordingPassIsTrusted(string streamed, int coveredMs, string tail)
     {
-        // The third review's cases: two streamed words past the overlap used to stitch by appending.
-        var covered = StreamTail.EffectiveCoveredMs("Hi Joel,", coveredMs);
-        var text = StreamTail.Combine("Hi Joel,", covered, "Hi Joel, quick update.");
-
-        Assert.Equal(0, covered);
-        Assert.Equal("Hi Joel, quick update.", text);
+        // Each of these pasted words twice when appended (third and fourth reviews).
+        Assert.Null(StreamTail.Combine(streamed, coveredMs, tail));
     }
 
     [Fact]
-    public void AStreamLongEnoughToStitchKeepsItsCoverage()
+    public void AStreamThatCoveredTheWholeRecordingRunsNoTailPassAtAll()
     {
-        Assert.Equal(2400, StreamTail.EffectiveCoveredMs("we should ship it", 2400));
+        // A short "Thanks Joel." fully streamed must paste at once, with no pass after the key comes up.
+        var samples = Tone(seconds: 1.5);
+
+        Assert.Null(StreamTail.Tail(samples, afterMs: 1500, totalMs: 1500));
     }
 
     [Fact]
-    public void ACoveredNothingTailIsTheWholeRecording()
+    public void TryJoinReportsWhetherItFoundTheSeam()
     {
-        var samples = new float[16_000 * 3];
+        Assert.True(Stitch.TryJoin("the build on friday after the review", "friday after the review and more", out var stitched));
+        Assert.Equal("the build on friday after the review and more", stitched);
+
+        Assert.False(Stitch.TryJoin("Hi Joel, quick", "Joel, quick update.", out var appended));
+        Assert.Equal("Hi Joel, quick Joel, quick update.", appended);
+        Assert.Equal(appended, Stitch.Join("Hi Joel, quick", "Joel, quick update."));
+    }
+
+    private static float[] Tone(double seconds)
+    {
+        var samples = new float[(int)(16_000 * seconds)];
         for (var i = 0; i < samples.Length; i++) samples[i] = (float)(0.3 * Math.Sin(i * 0.05));
-
-        var tail = StreamTail.Tail(samples, StreamTail.EffectiveCoveredMs("Hi Joel,", 2400), 3000);
-
-        Assert.NotNull(tail);
-        Assert.Equal(samples.Length, tail.Length);
-    }
-
-    [Fact]
-    public void ReplacingNeverDuplicatesTheOpeningWords()
-    {
-        var text = StreamTail.Combine("Hi Joel", coveredMs: 1400, "Hi Joel, quick update.");
-
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(text, "Joel"));
+        return samples;
     }
 }

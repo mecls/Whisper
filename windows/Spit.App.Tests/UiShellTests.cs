@@ -23,6 +23,9 @@ public sealed class UiShellTests
             try
             {
                 var paths = new AppPaths(root);
+                // Into the temp folder: CI's install check later reads the real data folder's log for the installed
+                // app's "ready" line, and this test's own line must not be what it finds.
+                Log.Paths = paths;
                 var settings = new SettingsStore(paths);
                 var model = new AppModel(settings);
                 // Port 9 (discard) on loopback: Insights and the dictionary fail fast and show their offline states.
@@ -62,6 +65,7 @@ public sealed class UiShellTests
             }
             finally
             {
+                Log.Paths = AppPaths.Default;
                 Dispatcher.CurrentDispatcher.InvokeShutdown();
             }
         });

@@ -47,6 +47,7 @@ public sealed class PasteIntoNotepadTests
                 diagnostics.Append($"before the paste: {GuiState(window)}; ");
                 var injector = new TextInjector(() => owner.Handle);
                 var result = Wait(injector.InsertAsync(Dictated, "notepad.exe"));
+                var sincePaste = Stopwatch.StartNew();
                 Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out var foregroundPid);
                 diagnostics.Append($"foreground after the paste: pid {foregroundPid} (Notepad pid {notepad.Id}); ");
                 Assert.Equal(InsertResult.Pasted, result);
@@ -54,8 +55,11 @@ public sealed class PasteIntoNotepadTests
                 var text = WaitForText(window, Dictated, diagnostics);
                 Assert.True(text.Contains(Dictated, StringComparison.Ordinal), $"Notepad holds \"{text}\". {diagnostics}");
 
-                // Still the dictation just after the paste: a restore this early would paste the user's clipboard instead.
-                Assert.Equal(Dictated, ReadClipboardText(owner.Handle));
+                // Still the dictation inside the ceiling: a restore this early would paste the user's clipboard instead.
+                // Checked only while the ceiling has clearly not passed — after it, the restore is correct — and only
+                // once Notepad has pasted, because reading earlier could hold the clipboard as Notepad opens it.
+                if (sincePaste.Elapsed < TextInjector.RestoreCeiling - TimeSpan.FromMilliseconds(300))
+                    Assert.Equal(Dictated, ReadClipboardText(owner.Handle));
                 Wait(injector.WaitForRestoreAsync());
                 Assert.Equal(UsersClipboard, ReadClipboardText(owner.Handle));
             }

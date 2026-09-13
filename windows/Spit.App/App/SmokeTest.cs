@@ -153,11 +153,11 @@ public static class SmokeTest
         var result = await session.FinishAsync();
         if (result is null) return (null, (int)clock.ElapsedMilliseconds, 0);
         var text = result.Text;
-        var covered = StreamTail.EffectiveCoveredMs(result.Text, result.CoveredMs);
-        if (StreamTail.Tail(samples, covered, audioMs) is { } tail)
+        if (StreamTail.Tail(samples, result.CoveredMs, audioMs) is { } tail)
         {
             var t = await transcriber.TranscribeAsync(tail, hint, progress: null);
-            text = StreamTail.Combine(text, covered, t.Text);
+            text = StreamTail.Combine(text, result.CoveredMs, t.Text)
+                ?? (await transcriber.TranscribeAsync(samples, hint, progress: null)).Text;
         }
         return (text, (int)clock.ElapsedMilliseconds, result.Segments);
     }

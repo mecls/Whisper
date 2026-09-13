@@ -529,6 +529,21 @@ build because §2 excluded it.
   UIPI drops input only into a process above the sender. Checking the target's elevation alone made every paste
   clipboard-only on a PC with UAC off (every process elevated) — found by the Notepad paste test on GitHub's runner, which
   runs with UAC off. Consequence for verification: the runner cannot exercise the admin-window path; spike S3 on a PC does.
+- **Stream + tail, final rule (supersedes `EffectiveCoveredMs` above, which the fourth review showed both forced a
+  whole-recording pass on fully covered one- or two-word dictations and still duplicated three- and four-word streams):**
+  `Tail` uses the stream's real coverage; `StreamTail.Combine` returns the tail when the stream covered ≤ 1.5 s, the
+  stitched text when `Stitch.TryJoin` finds a seam, and otherwise null, in which case the Coordinator transcribes the
+  whole recording. Appending is never used on Windows: text cannot tell a duplicated overlap from new speech, and a
+  duplicate lands in the user's document while a whole pass only costs time. Suggestion (not built): the Mac shares the
+  appending rule.
+- Rule 30 routing compares **integrity levels** (`ElevationProbe.BlocksInputFromSpit`: target level > Spit's level;
+  access denied = blocked). Elevation alone broke UAC-off PCs (every paste clipboard-only) and, once fixed that way,
+  would have lost dictations into SYSTEM-level windows from an elevated Spit (fourth review).
+- `SyncService.TokenChanged` (called on Save token) discards results of `/v1/me` requests sent with the previous token,
+  as `SignOut` already did — a late 401 would call a fresh token invalid for ten minutes.
+- CI hardening from the fourth review: the UI test logs to its temp folder, the install step deletes the data folder
+  before launching so its "ready"/`fatal` checks see only that launch, the live-text check flags any repeated phrase
+  of 1–5 words, and the Notepad test asserts "not restored yet" only while the 1.5 s ceiling has clearly not passed.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

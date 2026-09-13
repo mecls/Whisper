@@ -24,8 +24,9 @@ public sealed class SyncService : IDisposable
     /// successful sync, which is what gates the PUT.
     private ServerSettings? _last;
 
-    /// Bumped by `SignOut`, so a `/v1/me` already in flight when the user signed out cannot put their name back.
-    private int _signOuts;
+    /// Bumped by `SignOut` and `TokenChanged`: a `/v1/me` sent with the previous credential must not decide the state
+    /// of the new one — a late 200 would put a signed-out name back, a late 401 would call a fresh token invalid.
+    private int _credentialChanges;
 
     public SyncService(IVoiceApiClient api, ILocalSettings settings, TimeProvider? timeProvider = null)
     {
@@ -53,14 +54,14 @@ public sealed class SyncService : IDisposable
 
     public async Task SyncAsync()
     {
-        int signOuts;
-        lock (_gate) signOuts = _signOuts;
+        int credentialChanges;
+        lock (_gate) credentialChanges = _credentialChanges;
         try
         {
             var me = await _api.MeAsync().ConfigureAwait(false);
             lock (_gate)
             {
-                if (signOuts != _signOuts) return;
+                if (credentialChanges != _credentialChanges) return;
                 UserName = me.User.Name;
                 Unauthorized = false;
                 _last = me.Settings;
@@ -75,7 +76,7 @@ public sealed class SyncService : IDisposable
         {
             lock (_gate)
             {
-                if (signOuts != _signOuts) return;
+                if (credentialChanges != _credentialChanges) return;
                 Unauthorized = true;
             }
             Changed?.Invoke(this, EventArgs.Empty);
@@ -123,11 +124,17 @@ public sealed class SyncService : IDisposable
     {
         lock (_gate)
         {
-            _signOuts++;
+            _credentialChanges++;
             Unauthorized = true;
             UserName = null;
         }
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// A token was saved: results of requests sent before now no longer describe it.
+    public void TokenChanged()
+    {
+        lock (_gate) _credentialChanges++;
     }
 
     public void Dispose() => _timer?.Dispose();

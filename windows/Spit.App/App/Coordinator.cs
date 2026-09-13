@@ -657,15 +657,25 @@ public sealed class Coordinator : IDisposable
                 // own, over the leftover audio only, stitched at a seam found in the text.
                 var text = streamed.Text;
                 var asrMs = 0;
-                var covered = StreamTail.EffectiveCoveredMs(streamed.Text, streamed.CoveredMs);
-                if (StreamTail.Tail(samples, covered, audioMs) is { } tail)
+                if (StreamTail.Tail(samples, streamed.CoveredMs, audioMs) is { } tail)
                 {
-                    Log.Info(Category, $"transcribing stream tail: {audioMs - covered} ms of {audioMs} ms");
+                    Log.Info(Category, $"transcribing stream tail: {audioMs - streamed.CoveredMs} ms of {audioMs} ms");
                     try
                     {
                         var t = await Task.Run(() => current.TranscribeAsync(tail, hint, progress: null));
-                        text = StreamTail.Combine(text, covered, t.Text);
                         asrMs = t.DurationMs;
+                        if (StreamTail.Combine(text, streamed.CoveredMs, t.Text) is { } combined)
+                        {
+                            text = combined;
+                        }
+                        else
+                        {
+                            // No seam: stitching would paste the overlap twice, so only a pass over the whole recording is right.
+                            Log.Info(Category, $"no seam between stream and tail; transcribing all {audioMs} ms");
+                            var whole = await Task.Run(() => current.TranscribeAsync(samples, hint, progress: null));
+                            text = whole.Text;
+                            asrMs += whole.DurationMs;
+                        }
                     }
                     catch (Exception e)
                     {
@@ -1096,6 +1106,8 @@ public sealed class Coordinator : IDisposable
         // The URL in Settings now, as the Mac saves under `Preferences.serverURL`: after a URL change the token
         // must be where the relaunched app will look for it.
         tokens.Save(store.Current.ServerURL, token);
+        // A /v1/me still carrying the old token must not mark this one invalid when it lands.
+        sync.TokenChanged();
         model.HasToken = true;
         await RunSyncAsync();
     }
