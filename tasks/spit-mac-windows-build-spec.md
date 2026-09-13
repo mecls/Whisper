@@ -474,6 +474,9 @@ build because §2 excluded it.
   "Segoe UI" (WPF cannot select weights of the variable Segoe UI Variable).
 - `SingleInstance` calls `AllowSetForegroundWindow` before signalling, so the first instance may really come to front.
 - One `MicrophoneState` enum (with `Unknown`) serves capture and the Set-up window.
+- Gatekeeper check on a Safari-quarantined copy of `Spit.dmg`: `spctl` rejects the app (origin "Apple Development:
+  Miguel Carvalhal", not notarised) — exactly the "Apple could not verify…" → Open Anyway path rule 15 documents. The
+  disk image itself is left unsigned: signing a DMG without notarisation changes no dialog a friend sees.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 
