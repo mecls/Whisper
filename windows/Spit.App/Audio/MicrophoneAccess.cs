@@ -3,13 +3,6 @@ using NAudio.CoreAudioApi;
 
 namespace Spit.App;
 
-public enum MicrophoneState
-{
-    Available,
-    Blocked,
-    NoDevice,
-}
-
 /// Capture was refused with `E_ACCESSDENIED`: microphone access is off in Windows privacy settings (rule 39).
 public sealed class MicrophoneBlockedException : Exception
 {

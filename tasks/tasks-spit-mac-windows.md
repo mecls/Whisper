@@ -194,18 +194,18 @@ only trust the boxes if they were ticked as the work happened.
   - [ ] 4.11 `App/Coordinator.cs`: wires hotkey → capture → gate → transcribe → refine → paste → report
         exactly like `Coordinator.swift`, with the 1.2 s return-to-idle and 60 s pre-warm
 - [ ] 5.0 `Spit.App` user interface
-  - [ ] 5.1 `UI/TrayIcon.cs`: H.NotifyIcon with the four `menuIcon` states and the R37 menu order
-  - [ ] 5.2 `UI/BarWindow.xaml`: `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`, `ShowActivated=false`, sized to
+  - [x] 5.1 `UI/TrayIcon.cs`: H.NotifyIcon with the four `menuIcon` states and the R37 menu order
+  - [x] 5.2 `UI/BarWindow.xaml`: `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`, `ShowActivated=false`, sized to
         content, positioned by the R38 rule, lozenge / 20-bar waveform / red latched / status text
-  - [ ] 5.3 `UI/MainWindow.xaml`: sidebar with Insights and Settings; closing hides (R37)
-  - [ ] 5.4 `UI/InsightsView.xaml`: four cards and the 21-week heatmap over `InsightsPresentation`
-  - [ ] 5.5 `UI/SettingsView.xaml`: General, Model, Server, Dictionary pages mirroring `SettingsView.swift`
-  - [ ] 5.6 `UI/SetupWindow.xaml`: Microphone, Hotkey and Token rows; Done enabled on the first two (R40)
-  - [ ] 5.7 `UI/Strings.cs` with the Mac strings, Windows key names and the new Windows messages
+  - [x] 5.3 `UI/MainWindow.xaml`: sidebar with Insights and Settings; closing hides (R37)
+  - [x] 5.4 `UI/InsightsView.xaml`: four cards and the 21-week heatmap over `InsightsPresentation`
+  - [x] 5.5 `UI/SettingsView.xaml`: General, Model, Server, Dictionary pages mirroring `SettingsView.swift`
+  - [x] 5.6 `UI/SetupWindow.xaml`: Microphone, Hotkey and Token rows; Done enabled on the first two (R40)
+  - [x] 5.7 `UI/Strings.cs` with the Mac strings, Windows key names and the new Windows messages
         (admin window, clipboard busy, microphone blocked, time zone)
   - [x] 5.8 `Assets/start.wav`, `Assets/stop.wav` generated in-repo (original tones) and played with a
         preloaded `SoundPlayer`; `Assets/Spit.ico` from `mac/branding`
-  - [ ] 5.9 Single instance: named mutex `Local\co.miraside.voice.spit` plus an activation message (R36)
+  - [x] 5.9 Single instance: named mutex `Local\co.miraside.voice.spit` plus an activation message (R36)
   - [ ] 5.10 `--smoke-test` mode: start every service without the UI loop, load the model if present,
         transcribe a WAV passed on the command line, write `smoke.json`, exit 0/1 — used only by CI
 - [ ] 6.0 Windows installer and CI
