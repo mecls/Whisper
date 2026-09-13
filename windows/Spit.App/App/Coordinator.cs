@@ -736,7 +736,7 @@ public sealed class Coordinator : IDisposable
         // Rule 30: the window that will receive Ctrl+V decides, so elevation is checked now; the process from
         // hotkey-down stands in when nothing is in front.
         var process = ForegroundContext.ForegroundProcessId() ?? (targetProcess.TryGetValue(id, out var captured) ? captured : null);
-        var elevated = process is { } pid && ElevationProbe.IsElevated(pid);
+        var elevated = process is { } pid && ElevationProbe.BlocksInputFromSpit(pid);
 
         InsertResult result;
         try

@@ -525,6 +525,10 @@ build because §2 excluded it.
   (H.NotifyIcon v2.4.1 source), so assigning cached instances threw `ObjectDisposedException` the first time a state
   came back — the new whole-UI test caught it on its first CI run (Hud Listening → Message); in the app the tray icon
   would have stuck after the first dictation.
+- **An elevated target is clipboard-only only while Spit itself is not elevated** (`ElevationProbe.BlocksInputFromSpit`).
+  UIPI drops input only into a process above the sender. Checking the target's elevation alone made every paste
+  clipboard-only on a PC with UAC off (every process elevated) — found by the Notepad paste test on GitHub's runner, which
+  runs with UAC off. Consequence for verification: the runner cannot exercise the admin-window path; spike S3 on a PC does.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

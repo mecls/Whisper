@@ -57,7 +57,7 @@ public sealed class TextInjector
     public Task<InsertResult> InsertAsync(string text, string? targetExe)
     {
         var processId = ForegroundContext.ForegroundProcessId();
-        var elevated = processId is { } id && ElevationProbe.IsElevated(id);
+        var elevated = processId is { } id && ElevationProbe.BlocksInputFromSpit(id);
         return InsertAsync(text, Route(targetExe, elevated));
     }
 

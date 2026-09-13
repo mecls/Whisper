@@ -23,7 +23,16 @@ public static class ElevationProbe
         }
     }
 
-    public static bool IsCurrentProcessElevated() => TokenIsElevated(Native.GetCurrentProcess());
+    public static bool IsCurrentProcessElevated() => CurrentProcessElevated.Value;
+
+    private static readonly Lazy<bool> CurrentProcessElevated = new(() => TokenIsElevated(Native.GetCurrentProcess()));
+
+    /// Whether Windows will drop Spit's keystrokes into this process: UIPI blocks input only into a process
+    /// running *above* the sender, so an elevated target matters only while Spit itself is not elevated. With UAC
+    /// off, or Spit run as administrator, every process is elevated alike and the paste works — counting every
+    /// window as an admin window there turned every dictation into clipboard-only (found by the Notepad paste
+    /// test on a GitHub runner, which runs with UAC off).
+    public static bool BlocksInputFromSpit(int processId) => !IsCurrentProcessElevated() && IsElevated(processId);
 
     private static unsafe bool TokenIsElevated(nint process)
     {
