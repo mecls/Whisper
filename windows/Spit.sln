@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Spit.Core.Tests", "Spit.Cor
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Spit.App", "Spit.App\Spit.App.csproj", "{97F0435A-FACC-479D-B7B8-F62AAAD779EE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Spit.App.Tests", "Spit.App.Tests\Spit.App.Tests.csproj", "{60A55B67-F866-4B3E-ADCF-A7054780689C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{97F0435A-FACC-479D-B7B8-F62AAAD779EE}.Release|x64.Build.0 = Release|Any CPU
 		{97F0435A-FACC-479D-B7B8-F62AAAD779EE}.Release|x86.ActiveCfg = Release|Any CPU
 		{97F0435A-FACC-479D-B7B8-F62AAAD779EE}.Release|x86.Build.0 = Release|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Debug|x64.Build.0 = Debug|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Debug|x86.Build.0 = Debug|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Release|x64.ActiveCfg = Release|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Release|x64.Build.0 = Release|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Release|x86.ActiveCfg = Release|Any CPU
+		{60A55B67-F866-4B3E-ADCF-A7054780689C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
