@@ -31,11 +31,9 @@ internal static class ClipboardTestSupport
         if (failure is not null) ExceptionDispatchInfo.Throw(failure);
     }
 
-    /// Tests read back what they have just written, and a clipboard monitor on the machine (on a CI runner,
-    /// the remote-desktop clipboard redirector) reacts to that write by opening the clipboard itself —
-    /// sometimes for longer than the app's 200 ms rule, which failed a CI run. That rule is the app's
-    /// behaviour, not what these tests check, so test-side opens wait up to 3 s and name the holder if even
-    /// that is not enough.
+    /// Test-side opens wait up to 3 s rather than the app's 200 ms (that rule is the app's behaviour, not what
+    /// these tests check), and name the process holding the clipboard when even that is not enough — which is
+    /// how a CI failure was traced to two clipboard tests running in parallel (see `ClipboardCollection`).
     public static bool RunPatiently(nint owner, string purpose, Func<bool> work)
     {
         var started = System.Diagnostics.Stopwatch.GetTimestamp();

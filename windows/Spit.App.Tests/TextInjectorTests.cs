@@ -5,6 +5,7 @@ namespace Spit.App.Tests;
 
 /// Rules 25, 30 and 34. The paste itself (SendInput into a real window) is left to the PC checklist:
 /// on a CI runner it would type into whatever has focus.
+[Collection(ClipboardCollection.Name)]
 public sealed class TextInjectorTests
 {
     [WindowsFact]

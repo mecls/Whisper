@@ -451,6 +451,10 @@ build because §2 excluded it.
   instead of being pasted.
 - `Spit.App.Tests` skips per test with `[WindowsFact]` (xunit v3 has no class-level skip) and sets
   `ValidateExecutableReferencesMatchSelfContained=false` to reference the self-contained app.
+- **Every clipboard operation in the app runs on the thread that owns Spit's clipboard owner window (the WPF
+  dispatcher thread), and that thread never blocks for long.** When another thread or app calls `EmptyClipboard`
+  while Spit owns the clipboard, Windows *sends* `WM_DESTROYCLIPBOARD` to Spit's window and waits for its thread;
+  CI caught two clipboard tests deadlocking this way for 3 s. Clipboard tests run in one serial collection.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

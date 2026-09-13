@@ -3,6 +3,7 @@ using static Spit.App.Tests.ClipboardTestSupport;
 namespace Spit.App.Tests;
 
 /// Rule 33: the snapshot copies allowed memory formats and puts them back byte for byte.
+[Collection(ClipboardCollection.Name)]
 public sealed class ClipboardSnapshotTests
 {
     [WindowsFact]
