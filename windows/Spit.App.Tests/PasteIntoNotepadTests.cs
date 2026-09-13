@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Automation;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -44,10 +45,13 @@ public sealed class PasteIntoNotepadTests
 
                 var injector = new TextInjector(() => owner.Handle);
                 var result = Wait(injector.InsertAsync(Dictated, "notepad.exe"));
+                var diagnostics = new StringBuilder();
+                Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out var foregroundPid);
+                diagnostics.Append($"foreground after the paste: pid {foregroundPid} (Notepad pid {notepad.Id}); ");
                 Assert.Equal(InsertResult.Pasted, result);
 
-                var text = WaitForText(window, Dictated);
-                Assert.Contains(Dictated, text);
+                var text = WaitForText(window, Dictated, diagnostics);
+                Assert.True(text.Contains(Dictated, StringComparison.Ordinal), $"Notepad holds \"{text}\". {diagnostics}");
 
                 // Still the dictation just after the paste: a restore this early would paste the user's clipboard instead.
                 Assert.Equal(Dictated, ReadClipboardText(owner.Handle));
@@ -124,30 +128,67 @@ public sealed class PasteIntoNotepadTests
         throw new InvalidOperationException($"could not bring Notepad to the front; the foreground belongs to pid {pid}");
     }
 
-    private static string WaitForText(nint window, string expected)
+    private static string WaitForText(nint window, string expected, StringBuilder diagnostics)
     {
         var clock = Stopwatch.StartNew();
         var last = "";
         while (clock.Elapsed < TimeSpan.FromSeconds(10))
         {
-            last = ReadNotepadText(window);
+            last = ReadThroughWindowMessages(window);
             if (last.Contains(expected, StringComparison.Ordinal)) return last;
+            var automation = ReadThroughAutomation(window, out _);
+            if (automation.Contains(expected, StringComparison.Ordinal)) return automation;
             Pump(TimeSpan.FromMilliseconds(200));
         }
+        diagnostics.Append($"child windows: [{string.Join(", ", ChildClasses(window))}]; ");
+        ReadThroughAutomation(window, out var found);
+        diagnostics.Append($"automation: {found}");
         return last;
     }
 
-    private static string ReadNotepadText(nint window)
+    /// WM_GETTEXT on Notepad's editor child: works across processes for Edit and RichEdit controls.
+    private static string ReadThroughWindowMessages(nint window)
     {
+        foreach (var (child, name) in Children(window))
+        {
+            if (!name.StartsWith("Edit", StringComparison.OrdinalIgnoreCase) && !name.StartsWith("RichEdit", StringComparison.OrdinalIgnoreCase)) continue;
+            var length = (int)SendMessage(child, 0x000E, 0, 0);   // WM_GETTEXTLENGTH
+            var buffer = new StringBuilder(length + 1);
+            SendMessage(child, 0x000D, buffer.Capacity, buffer);  // WM_GETTEXT
+            if (buffer.Length > 0) return buffer.ToString();
+        }
+        return "";
+    }
+
+    private static string ReadThroughAutomation(nint window, out string found)
+    {
+        found = "no editor element";
         var root = AutomationElement.FromHandle(window);
         var editor = root.FindFirst(TreeScope.Descendants, new OrCondition(
             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document),
             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit)));
         if (editor is null) return "";
+        found = $"{editor.Current.ControlType.ProgrammaticName} '{editor.Current.ClassName}'";
         if (editor.TryGetCurrentPattern(TextPattern.Pattern, out var text)) return ((TextPattern)text).DocumentRange.GetText(-1);
         if (editor.TryGetCurrentPattern(ValuePattern.Pattern, out var value)) return ((ValuePattern)value).Current.Value;
+        found += " without a text or value pattern";
         return "";
     }
+
+    private static List<(nint Handle, string ClassName)> Children(nint window)
+    {
+        var children = new List<(nint, string)>();
+        EnumChildWindows(window, (child, _) =>
+        {
+            var name = new StringBuilder(256);
+            GetClassName(child, name, name.Capacity);
+            children.Add((child, name.ToString()));
+            return true;
+        }, 0);
+        return children;
+    }
+
+    private static IEnumerable<string> ChildClasses(nint window) => Children(window).Select(c => c.ClassName);
 
     private static string? ReadClipboardText(nint owner)
     {
@@ -169,6 +210,20 @@ public sealed class PasteIntoNotepadTests
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(nint hWnd);
+
+    private delegate bool EnumWindowsProc(nint hWnd, nint lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumChildWindows(nint hWndParent, EnumWindowsProc lpEnumFunc, nint lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(nint hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint SendMessage(nint hWnd, int msg, nint wParam, nint lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint SendMessage(nint hWnd, int msg, int wParam, StringBuilder lParam);
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(nint hWnd, int nCmdShow);
