@@ -133,7 +133,7 @@ only trust the boxes if they were ticked as the work happened.
         then detach. `package.sh` runs it last
   - [x] 2.7 Run `package.sh` (no `--release`) and `verify-dmg.sh`; all checks pass; `xcodebuild test`
         still 143 tests, 1 skipped, 0 failures
-- [ ] 3.0 `Spit.Core` and its tests on the Mac
+- [x] 3.0 `Spit.Core` and its tests on the Mac
   - [x] 3.1 Create `windows/Spit.sln`, `windows/Directory.Build.props` (reads `../VERSION` into
         `<Version>`, `Nullable` and `TreatWarningsAsErrors` on), `windows/Spit.Core/Spit.Core.csproj`
         (`net10.0`) and `windows/Spit.Core.Tests/Spit.Core.Tests.csproj` (xunit.v3 4.0.1)
@@ -148,21 +148,21 @@ only trust the boxes if they were ticked as the work happened.
   - [x] 3.5 Port `Stitch.swift`, `Coordinator.tail` / `minimumTailMs` / `overlapMs` (as `StreamTail`)
         and the confirmation/VAD rules from R22 (as `StreamingPolicy`) → `Spit.Core/Asr/`, plus
         `StitchTests` (8) and `StreamTailTests` (8)
-  - [ ] 3.6 Port `SkipGate`, `Budget`, `Outbox`, `VoiceAPI` DTOs + `IVoiceApiClient`, `RefineService`
+  - [x] 3.6 Port `SkipGate`, `Budget`, `Outbox`, `VoiceAPI` DTOs + `IVoiceApiClient`, `RefineService`
         → `Spit.Core/Refine/`, plus `SkipGateTests` (16), `BudgetTests` (1), `OutboxTests` (1),
         `RefineServiceTests` (8) and a `StubApi` test double mirroring `StubAPI.swift`
-  - [ ] 3.7 Port `SyncService` with R46's echo rule → `Spit.Core/Refine/`, plus `SyncServiceTests` (3)
+  - [x] 3.7 Port `SyncService` with R46's echo rule → `Spit.Core/Refine/`, plus `SyncServiceTests` (3)
         and two R46 tests (echoes `rightCommand`; no PUT before a successful `/v1/me`)
-  - [ ] 3.8 Port `Insights`, `HeatmapGrid`, `InsightsPresentation`, `InsightsFormat`, `InsightsCache`
+  - [x] 3.8 Port `Insights`, `HeatmapGrid`, `InsightsPresentation`, `InsightsFormat`, `InsightsCache`
         and the non-UI half of `InsightsModel` → `Spit.Core/Insights/`, with `IanaTimeZone` (R43), plus
         `InsightsTests` (24) and a time-zone test (Windows id → IANA; failure → no request)
   - [x] 3.9 Port `TextInjector.mustUseClipboard` as `PasteRouting` (own process, elevated target) →
         `Spit.Core/Inject/`, plus `TextInjectorRoutingTests` (5)
-  - [ ] 3.10 Add the real `HttpVoiceApiClient` (10 s timeout, budget for `/v1/refine`, `HEAD /health`
+  - [x] 3.10 Add the real `HttpVoiceApiClient` (10 s timeout, budget for `/v1/refine`, `HEAD /health`
         3 s) in `Spit.Core/Refine/` with a test against a local `HttpListener`-free fake handler
-  - [ ] 3.11 Add `windows/scripts/parity-check.sh`: for each of the 14 files, the Swift `func test`
+  - [x] 3.11 Add `windows/scripts/parity-check.sh`: for each of the 14 files, the Swift `func test`
         count equals the C# `[Fact]` count in the same-named class, and the names match; run it
-  - [ ] 3.12 `dotnet test windows/Spit.Core.Tests` passes on the Mac
+  - [x] 3.12 `dotnet test windows/Spit.Core.Tests` passes on the Mac
 - [ ] 4.0 `Spit.App` platform layer
   - [ ] 4.1 Create `windows/Spit.App/Spit.App.csproj` (`net10.0-windows`, `UseWPF`, `win-x64`,
         `AssemblyName` `Spit`, `ApplicationManifest` asInvoker) with the R24 packages, a hand-written

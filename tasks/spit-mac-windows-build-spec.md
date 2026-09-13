@@ -423,6 +423,20 @@ build because §2 excluded it.
   tests under their original names.
 - `StreamingPolicy` also ports WhisperKit's `isVoiceDetected` (strictly above 0.3), confirmed-segment accumulation
   and covered-time tracking — needed to reproduce the stream loop without WhisperKit.
+- `InsightsTotals.AudioMs` is `long` — Swift's `Int` is 64-bit; an `int` fails to decode past ~596 h of audio.
+- `SyncService` has no hotkey callback and never writes the local hotkey; `SyncServiceTests.testServerHotkeyChangeGoesThroughCallback`
+  keeps its Mac name and asserts the Windows rule instead (rule 46). `SignOut` clears state only; the Server page
+  deletes the credential (rule 44).
+- An id counts as IANA when .NET's `HasIanaId` says so, not when it contains '/' — macOS reports `Portugal`, a valid
+  IANA name with no slash; an unconvertible zone yields `InsightsNotice.TimeZoneUnknown` and no request.
+- Transport errors: DNS / connection refused / connection lost → Offline; TLS/protocol → Server(-1); the per-request
+  timeout → Timeout. An empty token sends no `authorization` header. `tz` is fully URL-encoded (the Mac leaves `+`,
+  which the server reads as a space).
+- `SkipGate` normalises to NFC and counts grapheme clusters, as Swift's `String.count` does; `Budget` gets the same
+  count.
+- `InsightsCache` writes atomically and rejects JSON with missing keys; `InsightsFormat.RelativeTime` is hand-written
+  English ("N minutes ago") since .NET has no relative date formatter.
+- `Spit.Core` has no logger; the Mac's debug/info lines are dropped there, so nothing in Core can log text.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 
