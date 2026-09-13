@@ -114,7 +114,7 @@ only trust the boxes if they were ticked as the work happened.
         intact data folder, token and Run entry. CI covers the silent install/uninstall half (6.5)
   - [ ] 1.8 **(PC)** Miguel answers open questions 2 (Smart App Control vs signing), 3 (latency
         threshold, after 1.3), 4 (no Right Ctrl, after 1.6) and 5 (how `site/` is deployed)
-- [ ] 2.0 One version and a strict Mac DMG
+- [x] 2.0 One version and a strict Mac DMG
   - [x] 2.1 Add root `VERSION` containing `0.2.0` (R6, R7)
   - [x] 2.2 Make `mac/project.yml` read the version: `CFBundleShortVersionString: $(MARKETING_VERSION)`
         in `info.properties`, `MARKETING_VERSION` set by `package.sh` from `VERSION`; replace the literal
@@ -131,21 +131,21 @@ only trust the boxes if they were ticked as the work happened.
         check `Spit.app` and the `Applications` symlink, `codesign --verify --deep --strict`, TeamIdentifier,
         `lipo -archs` = `arm64`, `CFBundleShortVersionString` = `VERSION`, bundle id `co.miraside.voice`,
         then detach. `package.sh` runs it last
-  - [ ] 2.7 Run `package.sh` (no `--release`) and `verify-dmg.sh`; all checks pass; `xcodebuild test`
+  - [x] 2.7 Run `package.sh` (no `--release`) and `verify-dmg.sh`; all checks pass; `xcodebuild test`
         still 143 tests, 1 skipped, 0 failures
 - [ ] 3.0 `Spit.Core` and its tests on the Mac
   - [x] 3.1 Create `windows/Spit.sln`, `windows/Directory.Build.props` (reads `../VERSION` into
         `<Version>`, `Nullable` and `TreatWarningsAsErrors` on), `windows/Spit.Core/Spit.Core.csproj`
         (`net10.0`) and `windows/Spit.Core.Tests/Spit.Core.Tests.csproj` (xunit.v3 4.0.1)
-  - [ ] 3.2 Port `Dictation.swift` and `DictationMachine.swift` → `Spit.Core/App/`, and
+  - [x] 3.2 Port `Dictation.swift` and `DictationMachine.swift` → `Spit.Core/App/`, and
         `DictationMachineTests` (7)
-  - [ ] 3.3 Port `TapLatch.swift`, `HotkeyInterpreter.swift` and `HotkeyChoice` (values `rightCtrl`,
+  - [x] 3.3 Port `TapLatch.swift`, `HotkeyInterpreter.swift` and `HotkeyChoice` (values `rightCtrl`,
         `rightAlt`) → `Spit.Core/Hotkey/`, with a pure `RawKeyEvent → KeyEvent` translator for R27/R28;
         port `TapLatchTests` (11) and `HotkeyInterpreterTests` (10); add `HotkeyTranslatorTests` for
         autorepeat, scan code `0x21D` and `LLKHF_INJECTED`
-  - [ ] 3.4 Port `EnergyGate.swift` and `RingBuffer.swift` → `Spit.Core/Audio/`, plus `EnergyGateTests`
+  - [x] 3.4 Port `EnergyGate.swift` and `RingBuffer.swift` → `Spit.Core/Audio/`, plus `EnergyGateTests`
         (3) and `RingBufferTests` (3)
-  - [ ] 3.5 Port `Stitch.swift`, `Coordinator.tail` / `minimumTailMs` / `overlapMs` (as `StreamTail`)
+  - [x] 3.5 Port `Stitch.swift`, `Coordinator.tail` / `minimumTailMs` / `overlapMs` (as `StreamTail`)
         and the confirmation/VAD rules from R22 (as `StreamingPolicy`) → `Spit.Core/Asr/`, plus
         `StitchTests` (8) and `StreamTailTests` (8)
   - [ ] 3.6 Port `SkipGate`, `Budget`, `Outbox`, `VoiceAPI` DTOs + `IVoiceApiClient`, `RefineService`
@@ -156,7 +156,7 @@ only trust the boxes if they were ticked as the work happened.
   - [ ] 3.8 Port `Insights`, `HeatmapGrid`, `InsightsPresentation`, `InsightsFormat`, `InsightsCache`
         and the non-UI half of `InsightsModel` → `Spit.Core/Insights/`, with `IanaTimeZone` (R43), plus
         `InsightsTests` (24) and a time-zone test (Windows id → IANA; failure → no request)
-  - [ ] 3.9 Port `TextInjector.mustUseClipboard` as `PasteRouting` (own process, elevated target) →
+  - [x] 3.9 Port `TextInjector.mustUseClipboard` as `PasteRouting` (own process, elevated target) →
         `Spit.Core/Inject/`, plus `TextInjectorRoutingTests` (5)
   - [ ] 3.10 Add the real `HttpVoiceApiClient` (10 s timeout, budget for `/v1/refine`, `HEAD /health`
         3 s) in `Spit.Core/Refine/` with a test against a local `HttpListener`-free fake handler
@@ -228,7 +228,7 @@ only trust the boxes if they were ticked as the work happened.
   - [x] 7.1 `docs/API.md`: note under `Settings` that `hotkey` is Mac-only and other clients echo it (R46)
   - [ ] 7.2 `README.md`: test counts (143 Mac, the new Windows count), a "Windows" section with the
         build and test commands, and "Install" pointing at `/spit`
-  - [ ] 7.3 `../../site/spit/index.html`: both buttons on `latest/download`, `SHA256SUMS.txt` link, every
+  - [x] 7.3 `../../site/spit/index.html`: both buttons on `latest/download`, `SHA256SUMS.txt` link, every
         R18 claim, Mac Gatekeeper steps; the Windows warning copy left as a marked block until 8.2's
         screenshots exist (R17–R19). Not in git: `site/` is outside the repo
 - [ ] 8.0 Release 0.2.0

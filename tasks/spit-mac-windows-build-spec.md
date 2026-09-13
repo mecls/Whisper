@@ -399,6 +399,32 @@ build because §2 excluded it.
   reverse.
 - Verification of the `.exe` happens on GitHub's `windows-latest` runners, plus a `--smoke-test` mode and
   a Windows-only test project — the only way to run Windows code without Miguel's PC.
+- `mac/project.yml` keeps a copy of the version (`MARKETING_VERSION`) and `Info.plist` reads
+  `$(MARKETING_VERSION)` — XcodeGen cannot read a file; `scripts/check-version.sh` fails `package.sh` and
+  CI when the copy drifts from `VERSION`.
+- `package.sh` builds tests into `build/test-dd` and never touches `mac/build/Spit.app` — Miguel's own build
+  lives there.
+- `--release` also refuses when the GitHub release is missing or already published — rule "never replace a
+  published asset" made mechanical.
+- Velopack 1.2.0 names the installer `Spit-win-Setup.exe` (channel `win`), not `Spit-Setup.exe` as PRD rule 8
+  assumed — verified by cross-packing on the Mac; `pack.ps1` renames it so the release asset name holds.
+- xunit.v3 runs on Microsoft.Testing.Platform via root `global.json` (`test.runner`) — the .NET 10 SDK refuses
+  VSTest for it; `Microsoft.NET.Test.Sdk` and `xunit.runner.visualstudio` are therefore not referenced.
+- Every `Spit.Core` type lives in the single namespace `Spit.Core` — a namespace named `Insights` beside a
+  type named `Insights` makes every reference ambiguous in C#.
+- While the hotkey is held, modifier key-downs (Shift, Ctrl, Alt, Win, Caps Lock) are not "another key" — the
+  Mac sees modifiers as `flagsChanged`, which never cancels; the key that completes a chord still cancels.
+- `DictationMachine`, `TapLatch`, `HotkeyInterpreter` are sealed classes (not structs) — mutable structs copy
+  silently in C#; `DictationMachine` takes a `TimeProvider` for `StartedAt`; the Mac's nested `Phase` is
+  `DictationPhase`.
+- `HotkeyChoice.FromRawValue` returns null for the Mac's values (`fn`, `rightOption`, `rightCommand`), which is
+  what keeps the server's hotkey from ever being applied on Windows (rule 46).
+- `PasteRouting.OwnBundleId` = `spit.exe` (case-insensitive); the Mac's secure-input tests became elevated-target
+  tests under their original names.
+- `StreamingPolicy` also ports WhisperKit's `isVoiceDetected` (strictly above 0.3), confirmed-segment accumulation
+  and covered-time tracking — needed to reproduce the stream loop without WhisperKit.
+- Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
+  would require friends to install .NET themselves.
 
 ## 17. Definition of Done
 
