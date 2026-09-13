@@ -41,6 +41,8 @@ A Sintra Labs Open Source dictation app for macOS: hold a hotkey, speak, release
 
 ## Install for teammates
 
+**Friends and teammates:** download `Spit.dmg` (Mac) or `Spit-Setup.exe` (Windows) from the `/spit` page on the Sintra Labs site, which walks through each OS's warning. Everything below is for building it yourself.
+
 ### A) From source (macOS 15+, Xcode 26)
 
 ```bash
@@ -146,6 +148,24 @@ Runs 39 unit tests on state machine, FIFO ordering, clipboard snapshots, hotkey 
 ```bash
 VOICE_ASR_TESTS=1 xcodebuild test ...
 ```
+
+**Mac DMG:**
+```bash
+mac/scripts/package.sh             # tests, arm64 Release, signs, writes mac/build/Spit.dmg, runs verify-dmg.sh
+mac/scripts/package.sh --release   # refuses ad-hoc signing; uploads Spit.dmg + SHA256SUMS.txt to the vX.Y.Z draft
+```
+
+The version lives in the root `VERSION` file; `scripts/check-version.sh` fails when `mac/project.yml` or a tag disagrees.
+
+**Windows client (`windows/`, .NET 10):** `Spit.Core` holds the rules ported from the Mac and runs anywhere; `Spit.App` is the WPF shell and runs on Windows 10/11 x64.
+```bash
+dotnet test windows/Spit.Core.Tests        # the Mac's tests, ported by name (runs on macOS too)
+windows/scripts/parity-check.sh            # fails if a ported test class drifts from its Swift file
+dotnet build windows/Spit.sln              # compiles Spit.App on macOS as well (EnableWindowsTargeting)
+pwsh windows/scripts/pack.ps1              # Windows only: self-contained publish + Velopack → windows/Releases/Spit-Setup.exe
+```
+
+CI (`.github/workflows/windows-ci.yml`) runs the core tests on Linux and Windows, the Windows-only tests, packs the installer, transcribes a fixture with the real model, and installs/uninstalls it on a Windows runner; the installer is attached to each run as an artifact. Pushing a `vX.Y.Z` tag runs `release-windows.yml`, which attaches `Spit-Setup.exe` to a draft release.
 
 **Documentation:**
 - [docs/PLAN.md](docs/PLAN.md) — architecture, design decisions, latency budget, verification checklist.

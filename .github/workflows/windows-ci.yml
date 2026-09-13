@@ -1,0 +1,142 @@
+# Proves the Windows client without a Windows PC (tasks/spit-mac-windows-build-spec.md AC-3, AC-6): core
+# tests on Linux and Windows, the parity check, Windows-only tests, a packed installer, a real transcription
+# with the pinned model, and a silent install → run → uninstall. Never creates a release.
+name: windows-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, spit-mac-windows]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  MODEL_FILE: ggml-large-v3-turbo-q5_0.bin
+  MODEL_SHA256: 394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
+
+jobs:
+  core:
+    name: core (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: VERSION agrees with mac/project.yml
+        shell: bash
+        run: scripts/check-version.sh
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Core tests
+        run: dotnet test windows/Spit.Core.Tests -c Release
+      - name: Parity with the Mac tests
+        if: runner.os == 'Linux'
+        run: windows/scripts/parity-check.sh
+
+  app:
+    needs: core
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build windows/Spit.sln -c Release
+
+      - name: Windows-only tests
+        run: dotnet test windows/Spit.App.Tests -c Release
+
+      - name: Pack
+        shell: pwsh
+        run: windows/scripts/pack.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Spit-Setup
+          path: windows/Releases/Spit-Setup.exe
+          if-no-files-found: error
+
+      - name: Restore the speech model
+        id: model
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\spit-model\${{ env.MODEL_FILE }}
+          key: whisper-${{ env.MODEL_SHA256 }}
+
+      - name: Download the speech model
+        if: steps.model.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'spit-model'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Invoke-WebRequest "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$env:MODEL_FILE" -OutFile (Join-Path $dir $env:MODEL_FILE)
+
+      - name: Smoke test — transcribe a fixture with the published app
+        shell: pwsh
+        run: |
+          $model = Join-Path $env:RUNNER_TEMP "spit-model\$env:MODEL_FILE"
+          $hash = (Get-FileHash $model -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne $env:MODEL_SHA256) { throw "model hash $hash does not match the pin" }
+          $data = Join-Path $env:RUNNER_TEMP 'spit-data'
+          New-Item -ItemType Directory -Force (Join-Path $data 'models') | Out-Null
+          Copy-Item $model (Join-Path $data "models\$env:MODEL_FILE")
+          $env:SPIT_DATA_DIR = $data
+          $report = Join-Path $env:RUNNER_TEMP 'smoke.json'
+          $p = Start-Process -FilePath windows/publish/Spit.exe -ArgumentList @('--smoke-test', (Resolve-Path mac/Fixtures/en.wav), '--report', $report) -PassThru -Wait -NoNewWindow
+          if (-not (Test-Path $report)) { throw "no smoke report (exit $($p.ExitCode))" }
+          Get-Content $report
+          $r = Get-Content $report -Raw | ConvertFrom-Json
+          if ($p.ExitCode -ne 0 -or -not $r.ok) { throw "smoke test failed: $($r.error)" }
+          if ([string]::IsNullOrWhiteSpace($r.text)) { throw 'smoke test produced no text' }
+          "| model | runtime | audio ms | transcribe ms |`n|---|---|---|---|`n| $($r.asrModel) | $($r.runtime) | $($r.audioMs) | $($r.transcribeMs) |" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Install, run, second instance, uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Resolve-Path windows/Releases/Spit-Setup.exe
+          $install = Join-Path $env:LOCALAPPDATA 'Spit'
+          $data = Join-Path $env:LOCALAPPDATA 'Miraside\Spit'
+
+          $p = Start-Process -FilePath $setup -ArgumentList '--silent' -PassThru -Wait
+          "setup exit $($p.ExitCode)"
+          $exe = Join-Path $install 'Spit.exe'
+          for ($i = 0; $i -lt 60 -and -not (Test-Path $exe); $i++) { Start-Sleep 1 }
+          if (-not (Test-Path $exe)) { throw "$exe was not installed" }
+          if (-not (Test-Path (Join-Path $install 'Update.exe'))) { throw 'Velopack Update.exe missing' }
+
+          Get-Process Spit -ErrorAction SilentlyContinue | Stop-Process -Force
+          $app = Start-Process -FilePath $exe -PassThru
+          Start-Sleep 15
+          $app.Refresh()
+          if ($app.HasExited) { throw "Spit exited after start with code $($app.ExitCode)" }
+
+          $second = Start-Process -FilePath $exe -PassThru
+          if (-not $second.WaitForExit(10000)) { throw 'a second Spit did not exit within 10 s (single instance broken)' }
+          "second instance exit $($second.ExitCode)"
+          if ($second.ExitCode -ne 0) { throw "second instance exited with $($second.ExitCode)" }
+          $app.Refresh()
+          if ($app.HasExited) { throw 'the first Spit exited when the second launched' }
+          if (-not (Test-Path $data)) { throw "$data was not created by the running app" }
+
+          Stop-Process -Id $app.Id -Force
+          Start-Sleep 2
+          $u = Start-Process -FilePath (Join-Path $install 'Update.exe') -ArgumentList @('--uninstall', '--silent') -PassThru -Wait
+          "uninstall exit $($u.ExitCode)"
+          for ($i = 0; $i -lt 30 -and (Test-Path $exe); $i++) { Start-Sleep 1 }
+          if (Test-Path $exe) { throw 'Spit.exe is still installed after uninstall' }
+          if (-not (Test-Path $data)) { throw "uninstall removed $data (rule 5)" }
+          'install/uninstall OK'

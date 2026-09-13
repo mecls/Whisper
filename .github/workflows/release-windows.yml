@@ -1,0 +1,61 @@
+# On a v* tag: check the tag against VERSION, test, pack, create the draft release if missing, and attach
+# Spit-Setup.exe (prd-spit-mac-windows.md rules 8-11, flow §3A). Never publishes: a release goes live only
+# after both manual checklists pass, by hand.
+name: release-windows
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Tag matches VERSION
+        shell: bash
+        run: scripts/check-version.sh "$GITHUB_REF_NAME"
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Test
+        run: |
+          dotnet test windows/Spit.Core.Tests -c Release
+          dotnet test windows/Spit.App.Tests -c Release
+
+      - name: Pack
+        shell: pwsh
+        run: windows/scripts/pack.ps1
+
+      - name: Attach Spit-Setup.exe to the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --title "Spit ${TAG#v}" \
+              --notes "Draft. Attach Spit.dmg with mac/scripts/package.sh --release, run both manual checklists, then publish."
+          fi
+          if [[ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]]; then
+            echo "::error::$TAG is already published; never replace a published asset — bump VERSION"
+            exit 1
+          fi
+          gh release upload "$TAG" windows/Releases/Spit-Setup.exe --clobber
+          # SHA256SUMS.txt covers whichever installers are attached; package.sh --release does the same,
+          # so the last uploader always leaves a complete file.
+          SUMS=$(mktemp -d)
+          gh release download "$TAG" --pattern 'Spit.dmg' --pattern 'Spit-Setup.exe' --dir "$SUMS"
+          (cd "$SUMS" && sha256sum $(ls Spit.dmg Spit-Setup.exe 2>/dev/null) > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          gh release upload "$TAG" "$SUMS/SHA256SUMS.txt" --clobber

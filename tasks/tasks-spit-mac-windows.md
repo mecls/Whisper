@@ -203,7 +203,7 @@ only trust the boxes if they were ticked as the work happened.
   - [ ] 5.6 `UI/SetupWindow.xaml`: Microphone, Hotkey and Token rows; Done enabled on the first two (R40)
   - [ ] 5.7 `UI/Strings.cs` with the Mac strings, Windows key names and the new Windows messages
         (admin window, clipboard busy, microphone blocked, time zone)
-  - [ ] 5.8 `Assets/start.wav`, `Assets/stop.wav` generated in-repo (original tones) and played with a
+  - [x] 5.8 `Assets/start.wav`, `Assets/stop.wav` generated in-repo (original tones) and played with a
         preloaded `SoundPlayer`; `Assets/Spit.ico` from `mac/branding`
   - [ ] 5.9 Single instance: named mutex `Local\co.miraside.voice.spit` plus an activation message (R36)
   - [ ] 5.10 `--smoke-test` mode: start every service without the UI loop, load the model if present,
@@ -225,7 +225,7 @@ only trust the boxes if they were ticked as the work happened.
   - [ ] 6.6 `.github/workflows/release-windows.yml` on `v*` tags: tag == `VERSION`, `dotnet test`, pack,
         `gh release create --draft` if absent, upload `Spit-Setup.exe` only (R8–R11)
 - [ ] 7.0 Docs and the `/spit` page
-  - [ ] 7.1 `docs/API.md`: note under `Settings` that `hotkey` is Mac-only and other clients echo it (R46)
+  - [x] 7.1 `docs/API.md`: note under `Settings` that `hotkey` is Mac-only and other clients echo it (R46)
   - [ ] 7.2 `README.md`: test counts (143 Mac, the new Windows count), a "Windows" section with the
         build and test commands, and "Install" pointing at `/spit`
   - [ ] 7.3 `../../site/spit/index.html`: both buttons on `latest/download`, `SHA256SUMS.txt` link, every
