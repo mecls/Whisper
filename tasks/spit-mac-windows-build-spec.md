@@ -437,6 +437,20 @@ build because §2 excluded it.
 - `InsightsCache` writes atomically and rejects JSON with missing keys; `InsightsFormat.RelativeTime` is hand-written
   English ("N minutes ago") since .NET has no relative date formatter.
 - `Spit.Core` has no logger; the Mac's debug/info lines are dropped there, so nothing in Core can log text.
+- `TextInjector.InsertAsync` returns once Ctrl+V is sent; the restore runs on its own 1.5 s later. Paste, copy and
+  restore all decide while holding the clipboard open, so a pending restore never overwrites newer text; a second
+  paste during a pending restore keeps the original snapshot. A failed `SendInput` leaves the text on the clipboard
+  with no restore (`ClipboardOnlyKeystrokeFailed`) — restoring would erase the dictation.
+- Restored clipboard content also carries the history-exclusion format, so the user's old copy is not re-added to
+  Clipboard History.
+- Elevation: only access-denied counts as elevated; any other failure (e.g. the process exited) is logged and
+  treated as not elevated.
+- The settings key stays `showTextInHUD` (Mac name) rather than §7's "showTextInBar".
+- `WhisperTranscriber` builds a processor per call (language and prompt are fixed at build time), caps the prompt at
+  100 words (~150 tokens), and drops whisper.cpp silence tags such as `[BLANK_AUDIO]` so they read as "Nothing heard"
+  instead of being pasted.
+- `Spit.App.Tests` skips per test with `[WindowsFact]` (xunit v3 has no class-level skip) and sets
+  `ValidateExecutableReferencesMatchSelfContained=false` to reference the self-contained app.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

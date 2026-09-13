@@ -21,7 +21,7 @@ public sealed class TextInjectorTests
             Assert.True(Native.IsClipboardFormatAvailable(exclude));
             byte[]? text = null;
             byte[]? flag = null;
-            Assert.True(ClipboardSession.Run(owner, "test read", () =>
+            Assert.True(RunPatiently(owner, "test read", () =>
             {
                 text = ClipboardSession.ReadData(Native.CF_UNICODETEXT, ClipboardSnapshot.MaxBytes);
                 flag = ClipboardSession.ReadData(exclude, 64);

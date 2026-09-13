@@ -12,7 +12,7 @@ public sealed class ClipboardSnapshotTests
         {
             var text = Utf16("Spit clipboard round-trip");
             var dib = OnePixelDib();
-            Assert.True(ClipboardSession.Run(owner, "test setup", () =>
+            Assert.True(RunPatiently(owner, "test setup", () =>
                 ClipboardSession.Empty()
                 && ClipboardSession.SetData(Native.CF_UNICODETEXT, text)
                 && ClipboardSession.SetData(Native.CF_DIB, dib)));
@@ -22,12 +22,12 @@ public sealed class ClipboardSnapshotTests
             Assert.Contains(snapshot.Items, item => item.Key == Native.CF_UNICODETEXT);
             Assert.Contains(snapshot.Items, item => item.Key == Native.CF_DIB);
 
-            Assert.True(ClipboardSession.Run(owner, "test overwrite", () => ClipboardSession.PlaceText("dictated text")));
+            Assert.True(RunPatiently(owner, "test overwrite", () => ClipboardSession.PlaceText("dictated text")));
             Assert.True(snapshot.Restore(owner));
 
             byte[]? restoredText = null;
             byte[]? restoredDib = null;
-            Assert.True(ClipboardSession.Run(owner, "test read", () =>
+            Assert.True(RunPatiently(owner, "test read", () =>
             {
                 restoredText = ClipboardSession.ReadData(Native.CF_UNICODETEXT, ClipboardSnapshot.MaxBytes);
                 restoredDib = ClipboardSession.ReadData(Native.CF_DIB, ClipboardSnapshot.MaxBytes);
@@ -50,7 +50,7 @@ public sealed class ClipboardSnapshotTests
         {
             var png = ClipboardSession.Register("PNG");
             Assert.NotEqual(0u, png);
-            Assert.True(ClipboardSession.Run(owner, "test setup", () =>
+            Assert.True(RunPatiently(owner, "test setup", () =>
                 ClipboardSession.Empty()
                 && ClipboardSession.SetData(Native.CF_UNICODETEXT, Utf16("small"))
                 && ClipboardSession.SetData(png, new byte[ClipboardSnapshot.MaxBytes + 1])));

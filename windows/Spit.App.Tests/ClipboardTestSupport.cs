@@ -31,6 +31,48 @@ internal static class ClipboardTestSupport
         if (failure is not null) ExceptionDispatchInfo.Throw(failure);
     }
 
+    /// Tests read back what they have just written, and a clipboard monitor on the machine (on a CI runner,
+    /// the remote-desktop clipboard redirector) reacts to that write by opening the clipboard itself —
+    /// sometimes for longer than the app's 200 ms rule, which failed a CI run. That rule is the app's
+    /// behaviour, not what these tests check, so test-side opens wait up to 3 s and name the holder if even
+    /// that is not enough.
+    public static bool RunPatiently(nint owner, string purpose, Func<bool> work)
+    {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        while (!Native.OpenClipboard(owner))
+        {
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(started) >= TimeSpan.FromSeconds(3))
+                throw new InvalidOperationException($"clipboard still busy after 3 s ({purpose}); held by {ClipboardHolder()}");
+            Thread.Sleep(10);
+        }
+        try
+        {
+            return work();
+        }
+        finally
+        {
+            Native.CloseClipboard();
+        }
+    }
+
+    private static string ClipboardHolder()
+    {
+        var window = GetOpenClipboardWindow();
+        if (window == 0) return "no window";
+        Native.GetWindowThreadProcessId(window, out var pid);
+        try
+        {
+            return $"{System.Diagnostics.Process.GetProcessById((int)pid).ProcessName} (pid {pid})";
+        }
+        catch (ArgumentException)
+        {
+            return $"pid {pid} (exited)";
+        }
+    }
+
+    [DllImport("user32.dll")]
+    private static extern nint GetOpenClipboardWindow();
+
     public static byte[] Utf16(string text)
     {
         var bytes = new byte[(text.Length + 1) * sizeof(char)];
