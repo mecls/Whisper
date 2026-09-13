@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Mac's tests, ported with their names (prd-spit-mac-windows.md rule 22). Run on macOS, Linux and
+       Windows: `dotnet test windows/Spit.Core.Tests`. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Spit.Core.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Microsoft.Testing.Platform, not VSTest: the .NET 10 SDK no longer runs xunit.v3 through VSTest
+         (see global.json's "test.runner"). -->
+    <PackageReference Include="xunit.v3" Version="4.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Spit.Core/Spit.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

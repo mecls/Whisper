@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Pure logic with no Windows dependency (prd-spit-mac-windows.md rule 23), so its tests run on the
+       Mac that the app is developed on. Nothing here may reference WPF, Win32 or NAudio. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Spit.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Spit.Core.Tests" />
+  </ItemGroup>
+</Project>

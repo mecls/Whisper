@@ -1,0 +1,20 @@
+<Project>
+  <!-- One version for both clients (prd-spit-mac-windows.md rule 6): read from the repo-root VERSION
+       file, so a release can never ship a Windows build whose clientVersion differs from the Mac's. -->
+  <PropertyGroup>
+    <SpitVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../VERSION').Trim())</SpitVersion>
+    <Version>$(SpitVersion)</Version>
+    <AssemblyVersion>$(SpitVersion).0</AssemblyVersion>
+    <FileVersion>$(SpitVersion).0</FileVersion>
+    <InformationalVersion>$(SpitVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Company>Miraside</Company>
+    <Product>Spit</Product>
+    <Copyright>Miraside</Copyright>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+</Project>

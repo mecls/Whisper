@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Windows shell around Spit.Core: hook, audio, clipboard, speech engine and UI
+       (prd-spit-mac-windows.md rule 23). Builds on macOS with EnableWindowsTargeting; runs only on
+       Windows 10/11 x64. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>Spit</AssemblyName>
+    <RootNamespace>Spit.App</RootNamespace>
+    <!-- FileDescription is what Task Manager, the taskbar and ForegroundContext (rule 31) read. -->
+    <AssemblyTitle>Spit</AssemblyTitle>
+    <StartupObject>Spit.App.Program</StartupObject>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Spit.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SelfContained>true</SelfContained>
+    <!-- Hand-written Main (Velopack requires VelopackApp.Build().Run() to be its first line). -->
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.NoAvx" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
+    <PackageReference Include="NAudio" Version="3.1.0" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
+    <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="3.0.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Spit.Core/Spit.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\*.ico" />
+    <Content Include="Assets\*.wav" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Spit.App.Tests" />
+  </ItemGroup>
+</Project>

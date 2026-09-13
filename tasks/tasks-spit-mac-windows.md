@@ -115,26 +115,26 @@ only trust the boxes if they were ticked as the work happened.
   - [ ] 1.8 **(PC)** Miguel answers open questions 2 (Smart App Control vs signing), 3 (latency
         threshold, after 1.3), 4 (no Right Ctrl, after 1.6) and 5 (how `site/` is deployed)
 - [ ] 2.0 One version and a strict Mac DMG
-  - [ ] 2.1 Add root `VERSION` containing `0.2.0` (R6, R7)
-  - [ ] 2.2 Make `mac/project.yml` read the version: `CFBundleShortVersionString: $(MARKETING_VERSION)`
+  - [x] 2.1 Add root `VERSION` containing `0.2.0` (R6, R7)
+  - [x] 2.2 Make `mac/project.yml` read the version: `CFBundleShortVersionString: $(MARKETING_VERSION)`
         in `info.properties`, `MARKETING_VERSION` set by `package.sh` from `VERSION`; replace the literal
         in `mac/Voice/Info.plist` with `$(MARKETING_VERSION)` so there is one copy
-  - [ ] 2.3 Set `ARCHS: arm64` under the `Voice` target's `settings.configs.Release` (R14)
-  - [ ] 2.4 Rewrite `mac/scripts/package.sh`: read `VERSION`, `xcodegen generate`, `xcodebuild test`,
+  - [x] 2.3 Set `ARCHS: arm64` under the `Voice` target's `settings.configs.Release` (R14)
+  - [x] 2.4 Rewrite `mac/scripts/package.sh`: read `VERSION`, `xcodegen generate`, `xcodebuild test`,
         Release build with `MARKETING_VERSION=$VERSION`, sign, stage `Spit.app` + `Applications` symlink,
         `hdiutil create -volname Spit … -format UDZO build/Spit.dmg` (R12)
-  - [ ] 2.5 Add `--release`: exit non-zero when no Apple Development identity exists, run
+  - [x] 2.5 Add `--release`: exit non-zero when no Apple Development identity exists, run
         `codesign --verify --deep --strict`, require `TeamIdentifier=FZC6P6XRGD`, then
         `gh release upload vX.Y.Z build/Spit.dmg --clobber` and regenerate `SHA256SUMS.txt` from both
         assets (R10, R13)
-  - [ ] 2.6 Add `mac/scripts/verify-dmg.sh`: `hdiutil verify`, attach read-only with `-nobrowse`,
+  - [x] 2.6 Add `mac/scripts/verify-dmg.sh`: `hdiutil verify`, attach read-only with `-nobrowse`,
         check `Spit.app` and the `Applications` symlink, `codesign --verify --deep --strict`, TeamIdentifier,
         `lipo -archs` = `arm64`, `CFBundleShortVersionString` = `VERSION`, bundle id `co.miraside.voice`,
         then detach. `package.sh` runs it last
   - [ ] 2.7 Run `package.sh` (no `--release`) and `verify-dmg.sh`; all checks pass; `xcodebuild test`
         still 143 tests, 1 skipped, 0 failures
 - [ ] 3.0 `Spit.Core` and its tests on the Mac
-  - [ ] 3.1 Create `windows/Spit.sln`, `windows/Directory.Build.props` (reads `../VERSION` into
+  - [x] 3.1 Create `windows/Spit.sln`, `windows/Directory.Build.props` (reads `../VERSION` into
         `<Version>`, `Nullable` and `TreatWarningsAsErrors` on), `windows/Spit.Core/Spit.Core.csproj`
         (`net10.0`) and `windows/Spit.Core.Tests/Spit.Core.Tests.csproj` (xunit.v3 4.0.1)
   - [ ] 3.2 Port `Dictation.swift` and `DictationMachine.swift` → `Spit.Core/App/`, and
