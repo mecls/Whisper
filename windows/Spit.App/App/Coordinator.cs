@@ -664,7 +664,7 @@ public sealed class Coordinator : IDisposable
                     {
                         var t = await Task.Run(() => current.TranscribeAsync(tail, hint, progress: null));
                         asrMs = t.DurationMs;
-                        if (StreamTail.Combine(text, streamed.CoveredMs, t.Text) is { } combined)
+                        if (StreamTail.Combine(text, streamed.CoveredMs, t.Text, StreamTail.OverlapHasSpeech(samples, streamed.CoveredMs, audioMs)) is { } combined)
                         {
                             text = combined;
                         }

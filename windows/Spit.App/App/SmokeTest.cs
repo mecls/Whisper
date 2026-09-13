@@ -109,7 +109,7 @@ public static class SmokeTest
             report.Language = once.Language;
             report.SkipGate = SkipGate.ReasonToClean(once.Text, "clean", once.Language)?.RawValue() ?? "skip";
 
-            (report.StreamedText, report.StreamMs, report.StreamSegments) = await StreamAsync(transcriber, samples, report.AudioMs, hint);
+            (report.StreamedText, report.StreamMs, report.StreamSegments, report.WholePassFallback) = await StreamAsync(transcriber, samples, report.AudioMs, hint);
 
             report.ExpectedWordsFound = ContainsExpectedWord(once.Text) && report.StreamedText is { } live && ContainsExpectedWord(live);
             report.Ok = once.Text.Length > 0 && report.ExpectedWordsFound;
@@ -137,7 +137,7 @@ public static class SmokeTest
 
     /// The Coordinator's live path over a file: capture is simulated by releasing 100 ms of audio every 100 ms,
     /// then the key "comes up". The time reported is release to text — finish, tail pass and stitch.
-    private static async Task<(string? Text, int Ms, int Segments)> StreamAsync(ISegmentTranscriber transcriber, float[] samples, int audioMs, TranscribeHint hint)
+    private static async Task<(string? Text, int Ms, int Segments, bool WholePass)> StreamAsync(ISegmentTranscriber transcriber, float[] samples, int audioMs, TranscribeHint hint)
     {
         var chunk = AudioCapture.SampleRate * ChunkMs / 1000;
         var fed = new Feed();
@@ -151,15 +151,24 @@ public static class SmokeTest
 
         var clock = Stopwatch.StartNew();
         var result = await session.FinishAsync();
-        if (result is null) return (null, (int)clock.ElapsedMilliseconds, 0);
+        if (result is null) return (null, (int)clock.ElapsedMilliseconds, 0, false);
         var text = result.Text;
+        var wholePass = false;
         if (StreamTail.Tail(samples, result.CoveredMs, audioMs) is { } tail)
         {
             var t = await transcriber.TranscribeAsync(tail, hint, progress: null);
-            text = StreamTail.Combine(text, result.CoveredMs, t.Text)
-                ?? (await transcriber.TranscribeAsync(samples, hint, progress: null)).Text;
+            if (StreamTail.Combine(text, result.CoveredMs, t.Text, StreamTail.OverlapHasSpeech(samples, result.CoveredMs, audioMs)) is { } combined)
+            {
+                text = combined;
+            }
+            else
+            {
+                // Reported, so CI can see when stitching fell back rather than having the fallback hide a broken stitch.
+                wholePass = true;
+                text = (await transcriber.TranscribeAsync(samples, hint, progress: null)).Text;
+            }
         }
-        return (text, (int)clock.ElapsedMilliseconds, result.Segments);
+        return (text, (int)clock.ElapsedMilliseconds, result.Segments, wholePass);
     }
 
     private static float[] Resample(float[] mono, int rate)
@@ -221,6 +230,7 @@ public static class SmokeTest
         public int TranscribeMs { get; set; }
         public int StreamMs { get; set; }
         public int StreamSegments { get; set; }
+        public bool WholePassFallback { get; set; }
         public bool HasSpeech { get; set; }
         public string? SkipGate { get; set; }
         public bool ExpectedWordsFound { get; set; }

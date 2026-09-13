@@ -544,6 +544,11 @@ build because §2 excluded it.
 - CI hardening from the fourth review: the UI test logs to its temp folder, the install step deletes the data folder
   before launching so its "ready"/`fatal` checks see only that launch, the live-text check flags any repeated phrase
   of 1–5 words, and the Notepad test asserts "not restored yet" only while the 1.5 s ceiling has clearly not passed.
+- Fifth review: the no-seam fallback ran in ordinary speech (a cut-off word at the tail's start, two shared words, new
+  speech after a pause). The Windows join may now skip up to two leading tail words before its anchor
+  (`Stitch.TryJoinAllowingTailSkip`; `Stitch.Join`/`TryJoin` stay identical to the Mac), and a tail whose overlap audio is
+  silence is appended as new speech (`StreamTail.OverlapHasSpeech`). The smoke report records `wholePassFallback` and CI
+  shows it; the Notepad test times the restore itself (≥ ceiling − 50 ms) instead of reading the clipboard inside it.
 - Installer size is ~126 MB (self-contained .NET + three Whisper runtimes) — accepted; framework-dependent
   would require friends to install .NET themselves.
 

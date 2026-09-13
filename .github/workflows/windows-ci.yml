@@ -99,7 +99,7 @@ jobs:
           New-Item -ItemType Directory -Force (Join-Path $data 'models') | Out-Null
           Copy-Item $model (Join-Path $data "models\$env:MODEL_FILE")
           $env:SPIT_DATA_DIR = $data
-          "| runtime asked | runtime loaded | audio ms | one-pass ms | live ms | text | live text |`n|---|---|---|---|---|---|---|" >> $env:GITHUB_STEP_SUMMARY
+          "| runtime asked | runtime loaded | audio ms | one-pass ms | live ms | whole-pass fallback | text | live text |`n|---|---|---|---|---|---|---|---|" >> $env:GITHUB_STEP_SUMMARY
           $failures = @()
           # `auto` is what friends get (Vulkan first); `cpu` is the comparison the runtime order is judged by.
           foreach ($runtime in @('auto', 'cpu')) {
@@ -110,7 +110,7 @@ jobs:
             "--- smoke report ($runtime) ---"
             Get-Content $report
             $r = Get-Content $report -Raw | ConvertFrom-Json
-            "| $runtime | $($r.runtime) | $($r.audioMs) | $($r.transcribeMs) | $($r.streamMs) | $($r.text) | $($r.streamedText) |" >> $env:GITHUB_STEP_SUMMARY
+            "| $runtime | $($r.runtime) | $($r.audioMs) | $($r.transcribeMs) | $($r.streamMs) | $($r.wholePassFallback) | $($r.text) | $($r.streamedText) |" >> $env:GITHUB_STEP_SUMMARY
             if ($p.ExitCode -ne 0 -or -not $r.ok) { $failures += "${runtime}: $($r.error)"; continue }
             if ([string]::IsNullOrWhiteSpace($r.streamedText)) { $failures += "${runtime}: the live path produced no text"; continue }
             # The live path must say what the one pass said: the same opening, no word pasted twice, about the same

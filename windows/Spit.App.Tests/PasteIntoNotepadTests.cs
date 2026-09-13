@@ -48,6 +48,10 @@ public sealed class PasteIntoNotepadTests
                 var injector = new TextInjector(() => owner.Handle);
                 var result = Wait(injector.InsertAsync(Dictated, "notepad.exe"));
                 var sincePaste = Stopwatch.StartNew();
+                // When the restore itself ran, measured from the keystroke: the "not early" proof, independent of how long
+                // reading Notepad takes (a clipboard read after the ceiling passes is correct and proves nothing).
+                var restoredAfter = TimeSpan.MaxValue;
+                _ = injector.WaitForRestoreAsync().ContinueWith(_ => restoredAfter = sincePaste.Elapsed, TaskContinuationOptions.ExecuteSynchronously);
                 Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out var foregroundPid);
                 diagnostics.Append($"foreground after the paste: pid {foregroundPid} (Notepad pid {notepad.Id}); ");
                 Assert.Equal(InsertResult.Pasted, result);
@@ -61,6 +65,8 @@ public sealed class PasteIntoNotepadTests
                 if (sincePaste.Elapsed < TextInjector.RestoreCeiling - TimeSpan.FromMilliseconds(300))
                     Assert.Equal(Dictated, ReadClipboardText(owner.Handle));
                 Wait(injector.WaitForRestoreAsync());
+                Assert.True(restoredAfter >= TextInjector.RestoreCeiling - TimeSpan.FromMilliseconds(50),
+                    $"the user's clipboard came back {restoredAfter.TotalMilliseconds:F0} ms after the paste, before the {TextInjector.RestoreCeiling.TotalMilliseconds:F0} ms ceiling");
                 Assert.Equal(UsersClipboard, ReadClipboardText(owner.Handle));
             }
             catch (Exception e)

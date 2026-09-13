@@ -59,6 +59,45 @@ public sealed class StreamTailCombineTests
         Assert.Equal(appended, Stitch.Join("Hi Joel, quick", "Joel, quick update."));
     }
 
+    [Fact]
+    public void ACutOffWordAtTheTailsStartStillFindsTheSeam()
+    {
+        // The overlap cut "dashboard" to "board"; the fifth review showed this sent ordinary speech to a whole pass.
+        var text = StreamTail.Combine(
+            "the MiraSite dashboard is running on Convex now",
+            coveredMs: 6000,
+            "board is running on Convex now, and the Olamaki lives on the VPS");
+
+        Assert.Equal("the MiraSite dashboard is running on Convex now, and the Olamaki lives on the VPS", text);
+    }
+
+    [Fact]
+    public void NewSpeechAfterASilentOverlapIsAppended()
+    {
+        Assert.Equal("Thanks for the update. See you on Monday.",
+            StreamTail.Combine("Thanks for the update.", coveredMs: 6000, "See you on Monday.", overlapHasSpeech: false));
+        Assert.Null(StreamTail.Combine("Thanks for the update.", coveredMs: 6000, "See you on Monday.", overlapHasSpeech: true));
+    }
+
+    [Fact]
+    public void OverlapHasSpeechReadsTheOverlapAudioOnly()
+    {
+        // 3 s: speech for the first second, silence after. Covered to 3 s, the overlap (1.5–3 s) is silent.
+        var samples = new float[16_000 * 3];
+        for (var i = 0; i < 16_000; i++) samples[i] = (float)(0.3 * Math.Sin(i * 0.05));
+
+        Assert.False(StreamTail.OverlapHasSpeech(samples, coveredMs: 3000, totalMs: 3000));
+        Assert.True(StreamTail.OverlapHasSpeech(samples, coveredMs: 2000, totalMs: 3000));
+    }
+
+    [Fact]
+    public void TheMacJoinNeverSkipsTailWords()
+    {
+        // Parity: Stitch.TryJoin stays the Mac's rule; only the Windows join skips fragment words.
+        Assert.False(Stitch.TryJoin("the dashboard is running on Convex now", "board is running on Convex now, and more", out _));
+        Assert.True(Stitch.TryJoinAllowingTailSkip("the dashboard is running on Convex now", "board is running on Convex now, and more", out _));
+    }
+
     private static float[] Tone(double seconds)
     {
         var samples = new float[(int)(16_000 * seconds)];

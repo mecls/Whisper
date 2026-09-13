@@ -33,7 +33,20 @@ public static class Stitch
     /// `Join`, reporting whether a seam was found (or one side was empty). False means `joined` is the tail simply
     /// appended — right when the tail is new speech, a duplication of the overlap when it is not. Text alone cannot
     /// tell those apart, which is why the Windows client re-transcribes instead of appending (`StreamTail.Combine`).
-    public static bool TryJoin(string streamed, string tail, out string joined)
+    public static bool TryJoin(string streamed, string tail, out string joined) =>
+        TryJoin(streamed, tail, maxTailSkip: 0, out joined);
+
+    /// Leading tail words a Windows join may pass over before its anchor. The overlap cut can leave a fragment ("board"
+    /// of "dashboard") or a word the two passes heard differently, and an anchor that must start at the tail's first
+    /// word then finds no seam in ordinary speech (fifth review). The skipped words lie inside the overlap, so the
+    /// stream already has them.
+    internal const int TailSkip = 2;
+
+    /// `TryJoin` allowing the anchor to start at tail word 0, 1 or 2 — longest anchor at the earliest start first.
+    public static bool TryJoinAllowingTailSkip(string streamed, string tail, out string joined) =>
+        TryJoin(streamed, tail, TailSkip, out joined);
+
+    private static bool TryJoin(string streamed, string tail, int maxTailSkip, out string joined)
     {
         var s = streamed.Trim();
         var t = tail.Trim();
@@ -50,25 +63,29 @@ public static class Stitch
 
         var sWords = s.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var tWords = t.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
         var sKeys = sWords.Select(Key).ToArray();
-        // Capped by both sides: capping only by the tail misses the seam whenever the tail is the
-        // longer of the two (the stream produced almost nothing but a hallucination).
-        var longest = Math.Min(AnchorWords, Math.Min(tWords.Length, sWords.Length));
 
-        // Longest anchor first; shorter anchors are a fallback, because the tail's opening words can
-        // run past the seam.
-        for (var length = longest; length >= MinimumAnchor; length--)
+        for (var skip = 0; skip <= maxTailSkip; skip++)
         {
-            var anchor = tWords.Take(length).Select(Key).ToArray();
-            // The last occurrence: a phrase repeated earlier in the dictation is not the seam.
-            for (var start = sKeys.Length - length; start >= 0; start--)
+            // Capped by both sides: capping only by the tail misses the seam whenever the tail is the
+            // longer of the two (the stream produced almost nothing but a hallucination).
+            var longest = Math.Min(AnchorWords, Math.Min(tWords.Length - skip, sWords.Length));
+
+            // Longest anchor first; shorter anchors are a fallback, because the tail's opening words can
+            // run past the seam.
+            for (var length = longest; length >= MinimumAnchor; length--)
             {
-                if (sKeys.AsSpan(start, length).SequenceEqual(anchor))
+                var anchor = tWords.Skip(skip).Take(length).Select(Key).ToArray();
+                // The last occurrence: a phrase repeated earlier in the dictation is not the seam.
+                for (var start = sKeys.Length - length; start >= 0; start--)
                 {
-                    var kept = string.Join(' ', sWords.Take(start));
-                    joined = kept.Length == 0 ? t : kept + " " + t;
-                    return true;
+                    if (sKeys.AsSpan(start, length).SequenceEqual(anchor))
+                    {
+                        var kept = string.Join(' ', sWords.Take(start));
+                        var rest = string.Join(' ', tWords.Skip(skip));
+                        joined = kept.Length == 0 ? rest : kept + " " + rest;
+                        return true;
+                    }
                 }
             }
         }

@@ -40,22 +40,34 @@ public static class StreamTail
         return samples[Index(Math.Max(0, afterMs - OverlapMs))..];
     }
 
+    /// Whether the audio the tail pass re-reads — the `OverlapMs` before the stream's end — holds speech. When it does
+    /// not (the user paused there), no word in the tail can repeat the stream, and the tail is new speech to append.
+    public static bool OverlapHasSpeech(float[] samples, int coveredMs, int totalMs)
+    {
+        if (totalMs <= 0 || samples.Length == 0) return true;
+        int Index(int ms) => Math.Clamp((int)((double)ms / totalMs * samples.Length), 0, samples.Length);
+        var from = Index(Math.Max(0, coveredMs - OverlapMs));
+        var to = Index(coveredMs);
+        // An empty slice cannot prove silence; say speech, which only ever costs a whole pass.
+        return to <= from || EnergyGate.HasSpeech(samples.AsSpan(from, to - from));
+    }
+
     /// The dictation's text from the streamed transcript and a tail pass over `Tail(samples, coveredMs, …)`, or null
     /// when only a transcription of the whole recording can be trusted.
     ///
     /// - A blank tail keeps the streamed text.
     /// - When the stream covered no more than `OverlapMs`, the tail pass started at the first sample: it is the whole
     ///   recording, so it replaces the stream.
-    /// - When `Stitch` finds the seam, the stitched text.
-    /// - Otherwise null. Appending, the Mac's rule, pastes whatever the tail's overlap heard again — "Hi Joel Hi Joel,
-    ///   quick update…" in a CI smoke run, "Hi Joel, quick Joel, quick update…" in review — and text cannot tell that
-    ///   apart from a tail of genuinely new speech, so the caller transcribes the whole recording instead. That costs
-    ///   the wait live transcription saves, but only when no seam exists; a stream that covered the recording never
-    ///   gets here, because `Tail` returns null for it.
-    public static string? Combine(string streamed, int coveredMs, string tail)
+    /// - When `Stitch` finds the seam (allowing two fragment words at the tail's start), the stitched text.
+    /// - When the overlap was silence, the tail is new speech: appended.
+    /// - Otherwise null. Appending there, the Mac's rule, pastes whatever the overlap heard again — "Hi Joel Hi Joel,
+    ///   quick update…" in a CI smoke run, "Hi Joel, quick Joel, quick update…" in review — so the caller transcribes
+    ///   the whole recording instead. A stream that covered the recording never gets here: `Tail` returns null for it.
+    public static string? Combine(string streamed, int coveredMs, string tail, bool overlapHasSpeech = true)
     {
         if (string.IsNullOrWhiteSpace(tail)) return streamed.Trim();
         if (coveredMs <= OverlapMs) return tail.Trim();
-        return Stitch.TryJoin(streamed, tail, out var joined) ? joined : null;
+        if (Stitch.TryJoinAllowingTailSkip(streamed, tail, out var joined)) return joined;
+        return overlapHasSpeech ? null : joined;
     }
 }
