@@ -25,6 +25,9 @@ struct HUDView: View {
         static let idleHeight: CGFloat = 12
         static let mic: CGFloat = 22
         static let icon: CGFloat = 11
+        /// The largest square that fits inside the mic circle (22 / √2 ≈ 15.6). Any bigger and the
+        /// top and bottom of the spit mark's face hang outside the button.
+        static let spit: CGFloat = 15
         static let text: CGFloat = 10.5
         static let bars = 20
         static let barWidth: CGFloat = 2.5
@@ -70,10 +73,21 @@ struct HUDView: View {
 
     /// The one interactive element. Red while latched — which is also the only latched indicator
     /// the bar needs: with the waveform beside it, a badge reading "hands-free" is redundant.
+    ///
+    /// While listening it carries the spit mark instead of a microphone, its arcs following the
+    /// voice. The newest few levels are pooled so one quiet sample between syllables does not blink
+    /// the arcs off.
     private var micButton: some View {
         Button(action: { model.onMicTap?() }) {
-            Image(systemName: model.latched ? "stop.fill" : "mic.fill")
-                .font(.system(size: Metric.icon, weight: .semibold))
+            Group {
+                if isListening {
+                    SpitMark(level: model.levels.suffix(3).max() ?? 0)
+                        .frame(width: Metric.spit, height: Metric.spit)
+                } else {
+                    Image(systemName: model.latched ? "stop.fill" : "mic.fill")
+                        .font(.system(size: Metric.icon, weight: .semibold))
+                }
+            }
                 .frame(width: Metric.mic, height: Metric.mic)
                 .background(model.latched ? Color.red.opacity(0.9) : Color.secondary.opacity(0.18),
                             in: Circle())
@@ -126,11 +140,15 @@ struct HUDView: View {
             ForEach(Array(padded.enumerated()), id: \.offset) { _, l in
                 RoundedRectangle(cornerRadius: 1)
                     .frame(width: Metric.barWidth,
-                           height: max(2, CGFloat(min(l * 40, 1)) * Metric.barMax))
+                           height: max(2, CGFloat(Self.loudness(l)) * Metric.barMax))
             }
         }
         .frame(height: Metric.barMax)
         .foregroundStyle(model.latched ? Color.red.opacity(0.85) : Color.secondary)
         .allowsHitTesting(false)
     }
+
+    /// A microphone level as 0...1, full at 0.025. Shared by the waveform and the spit mark's arcs
+    /// so the two beside each other agree on what "loud" is.
+    static func loudness(_ level: Float) -> Float { min(level * 40, 1) }
 }

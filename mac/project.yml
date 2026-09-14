@@ -54,7 +54,8 @@ targets:
         # ASSETCATALOG_COMPILER_APPICON_NAME below — with only the build setting the icon
         # compiles into Assets.car but the Dock still shows the generic placeholder.
         CFBundleIconName: AppIcon
-        CFBundleShortVersionString: "0.1.0"
+        # Resolved from MARKETING_VERSION below at build time, so the plist holds no second copy.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "1"
         # Voice is a regular app now, with a dock icon and an Insights window
         # (prd-insights-dashboard.md rule 1). This and AppDelegate's
@@ -95,8 +96,17 @@ targets:
         ENABLE_HARDENED_RUNTIME: NO
         ENABLE_APP_SANDBOX: NO
         GENERATE_INFOPLIST_FILE: NO
-        MARKETING_VERSION: 0.1.0
+        # Must equal the repo-root VERSION file, which both clients ship from. XcodeGen cannot read a
+        # file, so this is the one duplicate — and scripts/check-version.sh fails package.sh and
+        # Windows CI the moment the two disagree.
+        MARKETING_VERSION: 0.2.0
         CURRENT_PROJECT_VERSION: 1
+      configs:
+        # Apple Silicon only (prd-spit-mac-windows.md rule 14): WhisperKit's encoder runs on the Neural
+        # Engine, and an Intel build would silently fall back to an untested CPU path.
+        Release:
+          ARCHS: arm64
+          ONLY_ACTIVE_ARCH: NO
   VoiceTests:
     type: bundle.unit-test
     platform: macOS

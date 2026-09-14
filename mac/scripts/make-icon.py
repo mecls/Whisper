@@ -1,34 +1,37 @@
 #!/usr/bin/env python3
 """
-Generates Voice.app's icon from the 1-bit mark in `mac/branding/voice-mark.png`.
+Generates Spit.app's icon from the dot-matrix logo in `mac/branding/spit-logo.png`.
 
-Run after changing the mark:
+Run after changing the logo:
 
     python3 mac/scripts/make-icon.py && cd mac && xcodegen generate
 
-Why this is a script and not ten exported PNGs: the mark is a dithered 1-bit
-image, and dithering is hostile to naive resizing. Scaling it with a smooth
-filter averages neighbouring black and white pixels into grey, so the texture
-turns to mush and the silhouette softens. Scaling it with nearest-neighbour to
-a non-integer factor is worse in a different way — some source pixels land on
-2 output pixels and some on 3, so the dot grid visibly stutters.
+Why this is a script and not ten exported PNGs: the logo is a full-bleed 416 px
+tile, two colours, drawn on a grid of 4 px cells. Two things are wrong with
+using it as-is. It fills its canvas edge to edge, but macOS expects the plate to
+occupy 824 of a 1024 canvas, so dropped in raw it looks oversized beside every
+other Dock icon. And 416 px is too small for the 1024 px slot: scaling it up
+with a smooth filter turns every dot into a blurry blob, and nearest-neighbour
+to a non-integer factor makes the dot grid stutter (some cells land on 7 output
+pixels, some on 8).
 
-The pipeline below avoids both: crop to the ink, blow it up by a whole-number
-factor with NEAREST (every dot stays a hard square), then come back down to
-each icon size with LANCZOS. The one downscale is what produces clean edges at
-512 px and a readable head-and-shoulders at 32 px, where the dither itself is
-finer than a pixel and has to average away rather than alias into noise.
+So the logo is read back as what it is — a grid of on/off cells — and redrawn
+from scratch: each lit cell becomes a square at its exact fractional position,
+rendered at 4x and box-averaged down, which gives true sub-pixel edges instead
+of resampling someone else's pixels. The plate is redrawn too, as Apple's
+superellipse at the standard size, filled with the logo's own navy.
 """
 
+from collections import Counter
 from pathlib import Path
 import json
 import subprocess
 import sys
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent          # mac/
-SRC = ROOT / "branding" / "voice-mark.png"
+SRC = ROOT / "branding" / "spit-logo.png"
 ICONSET = ROOT / "branding" / "Voice.iconset"
 APPICON = ROOT / "Voice" / "Assets.xcassets" / "AppIcon.appiconset"
 
@@ -37,12 +40,9 @@ CANVAS = 1024
 # the surrounding space the system expects for shadow and optical alignment.
 PLATE = 824
 CORNER = 185.4 / 824          # superellipse radius as a fraction of the plate
-SUPERSAMPLE = 4               # the plate is drawn 4x and averaged down for a clean edge
+SUPERSAMPLE = 4               # plate and dots are drawn 4x and averaged down for a clean edge
 
-PLATE_FILL = (252, 252, 250)  # near-white, a touch warm so it is not a glare next to system icons
-PLATE_EDGE = (223, 223, 216)  # hairline, so the plate still has an edge on a white background
-INK_INSET = 78                # padding between the plate edge and the artwork
-EDGE_WIDTH = 4                # hairline around the plate
+CELL = 4                      # the logo's dot grid: every cell is a 4x4 block of one colour
 
 # (size, scale) pairs macOS wants in an .icns / .appiconset.
 SIZES = [(16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2), (256, 1), (256, 2), (512, 1), (512, 2)]
@@ -76,61 +76,62 @@ def squircle_mask(size: int, radius_frac: float) -> Image.Image:
     return mask.resize((size, size), Image.LANCZOS)
 
 
-def build_master() -> Image.Image:
+def read_logo() -> tuple[list[list[bool]], tuple[int, int, int], tuple[int, int, int]]:
+    """Returns the logo's lit cells plus its plate and ink colours."""
     if not SRC.exists():
-        sys.exit(f"missing source mark: {SRC}")
+        sys.exit(f"missing source logo: {SRC}")
 
-    mark = Image.open(SRC).convert("RGBA")
+    logo = Image.open(SRC).convert("RGBA")
+    if logo.width != logo.height or logo.width % CELL:
+        sys.exit(f"expected a square logo on a {CELL} px grid, got {logo.size}")
 
-    # Crop to the ink. The supplied mark sits in a large white field; keeping
-    # that field would shrink the figure to a dot once it is inset again below.
-    grey = mark.convert("L")
-    ink = grey.point(lambda p: 255 if p < 128 else 0)
-    box = ink.getbbox()
-    if box is None:
-        sys.exit("source mark has no dark pixels")
-    art = mark.crop(box)
+    # The logo is two colours; the corners are transparent and antialiased, so
+    # only fully opaque pixels count. The darker of the two is the plate.
+    opaque = Counter(p[:3] for p in logo.getdata() if p[3] == 255)
+    if len(opaque) < 2:
+        sys.exit("source logo needs a plate colour and an ink colour")
+    plate, ink = sorted((c for c, _ in opaque.most_common(2)), key=sum)
 
-    # Whole-number blow-up first: every source pixel becomes an exact square.
-    target = PLATE - 2 * INK_INSET
-    factor = max(1, -(-target * 3 // max(art.size)))     # ceil, then some headroom
-    art = art.resize((art.width * factor, art.height * factor), Image.NEAREST)
+    n = logo.width // CELL
+    cells = []
+    for gy in range(n):
+        row = []
+        for gx in range(n):
+            block = {logo.getpixel((gx * CELL + dx, gy * CELL + dy))[:3]
+                     for dx in range(CELL) for dy in range(CELL)}
+            # A cell straddling two colours means the grid assumption is wrong,
+            # and the redraw would silently shift or drop dots.
+            if ink in block and len(block) > 1:
+                sys.exit(f"cell ({gx}, {gy}) is not a solid {CELL}x{CELL} block — is the logo still on a {CELL} px grid?")
+            row.append(block == {ink})
+        cells.append(row)
+    return cells, plate, ink
 
-    # Then one clean downscale to the size it actually occupies.
-    scale = min(target / art.width, target / art.height)
-    art = art.resize((max(1, round(art.width * scale)), max(1, round(art.height * scale))), Image.LANCZOS)
 
-    # White in the mark is the plate, not ink — drop it so the plate shows through
-    # and the figure keeps its dithered edge instead of sitting on a white block.
-    rgb = art.convert("RGB")
-    alpha = rgb.convert("L").point(lambda p: 255 - p)
-    art.putalpha(alpha)
-    black = Image.new("RGBA", art.size, (17, 17, 16, 0))
-    black.putalpha(alpha)
-    art = black
+def build_master() -> Image.Image:
+    cells, plate_rgb, ink_rgb = read_logo()
+    n = len(cells)
 
-    plate = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-    body = Image.new("RGBA", (PLATE, PLATE), PLATE_FILL + (255,))
+    # Dots, drawn at 4x on integer edges and box-averaged down: each dot's edge
+    # lands at its true fractional position (824 / 104 is not a whole number).
+    big = PLATE * SUPERSAMPLE
+    edge = [round(i * big / n) for i in range(n + 1)]
+    dots = Image.new("L", (big, big), 0)
+    draw = ImageDraw.Draw(dots)
+    for gy, row in enumerate(cells):
+        for gx, lit in enumerate(row):
+            if lit:
+                draw.rectangle([edge[gx], edge[gy], edge[gx + 1] - 1, edge[gy + 1] - 1], fill=255)
+    dots = dots.resize((PLATE, PLATE), Image.BOX)
 
-    # The hairline has to follow the squircle, not a rectangle. Stroking a rect and
-    # then masking it leaves the edge only where the two shapes happen to coincide —
-    # four faint smudges near the corners and nothing along the sides.
-    outer = squircle_mask(PLATE, CORNER)
-    inner = Image.new("L", (PLATE, PLATE), 0)
-    inner.paste(squircle_mask(PLATE - 2 * EDGE_WIDTH, CORNER), (EDGE_WIDTH, EDGE_WIDTH))
-    ring = ImageChops.subtract(outer, inner)
-    body.paste(Image.new("RGBA", (PLATE, PLATE), PLATE_EDGE + (255,)), (0, 0), ring)
-    body.putalpha(outer)
+    body = Image.new("RGBA", (PLATE, PLATE), plate_rgb + (255,))
+    body.paste(Image.new("RGBA", (PLATE, PLATE), ink_rgb + (255,)), (0, 0), dots)
+    body.putalpha(squircle_mask(PLATE, CORNER))
 
+    master = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
     off = (CANVAS - PLATE) // 2
-    plate.paste(body, (off, off), body)
-
-    # Optically centred: a head-and-shoulders bust reads as low if it is placed
-    # on the geometric centre, because the mass sits at the bottom.
-    x = off + (PLATE - art.width) // 2
-    y = off + (PLATE - art.height) // 2 - round(PLATE * 0.015)
-    plate.paste(art, (x, y), art)
-    return plate
+    master.paste(body, (off, off), body)
+    return master
 
 
 CONTENTS = {
@@ -153,7 +154,7 @@ def main() -> None:
     for size, mult in SIZES:
         px = size * mult
         name = f"icon_{size}x{size}{'@2x' if mult == 2 else ''}.png"
-        img = master.resize((px, px), Image.LANCZOS)
+        img = master if px == CANVAS else master.resize((px, px), Image.LANCZOS)
         img.save(ICONSET / name)
         img.save(APPICON / name)
 

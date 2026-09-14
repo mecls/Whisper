@@ -130,3 +130,28 @@ spec are independent of this and stand unchanged; the engine choice reverts to t
 
 Benchmarks kept at `scratchpad/fmbench.swift` and `fmbench2.swift` for re-running against a future
 OS model revision.
+
+## whisper.cpp on a GitHub Windows runner (2026-09-13, Whisper.net 1.9.1, `windows-latest`)
+
+Windows Server 2025, 4 vCPU, **no GPU**. `Spit.exe --smoke-test mac/Fixtures/en.wav` (12,522 ms of audio), one pass
+after a 1 s warm-up, then the live path fed 100 ms at a time in real time. The runtime order is Vulkan → CPU → CPU
+without AVX; with no GPU, whisper.cpp logs "no GPU found" and runs the Vulkan build on the CPU device.
+
+| Model | Runtime | One pass | Live path | CI run |
+|---|---|---|---|---|
+| `ggml-large-v3-turbo-q5_0` (574 MB) | Vulkan build | 85,137 ms | 157,657 ms | 34769047187 |
+| `ggml-large-v3-turbo-q5_0` | CPU | 85,098 ms | 155,968 ms | 34769047187 |
+| `ggml-large-v3-turbo-q5_0` | Vulkan build | 53,114 ms | 89,868 ms | 34773209592 (a faster runner) |
+| `ggml-large-v3-turbo-q5_0` | CPU | 53,577 ms | 98,838 ms | 34773209592 |
+| **`ggml-small-q8_0` (264 MB)** | Vulkan build | **12,881 ms** | 36,904 ms | 34774293255 |
+| **`ggml-small-q8_0`** | CPU | **12,896 ms** | 37,024 ms | 34774293255 |
+
+- **large-v3-turbo text:** "Hi Joel, quick update. The MiraSite dashboard is running on Convex now, and the Olamaki lives
+  on the VPS. Can you send me the deck before Friday? Thanks."
+- **small text:** "Hi Joe, quick update. The MiraSite dashboard is running on Convex now, and the Olomac he lives on
+  the VPS. Can you send me the deck before Friday? Thanks." Miguel judged it good enough; small is the Windows default.
+- **CPU and Vulkan runtimes are identical without a GPU,** so trying Vulkan first costs nothing on such a PC.
+- **The live path is slower than one pass on a slow CPU.** Its passes queue behind each other, and on the small model it
+  found no seam between stream and tail, so it re-transcribed the whole clip (task 9.1).
+- **Still to measure on a real PC (S1):** a machine with a GPU Vulkan can use, `pt-synthetic.wav`, and 20 real
+  dictations through the latency SQL.

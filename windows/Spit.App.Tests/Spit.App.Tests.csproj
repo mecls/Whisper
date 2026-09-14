@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows-runtime proofs for Spit.App's platform services: clipboard, paste, elevation, foreground
+       context, Credential Manager, the Run key and local storage (build spec §12). Run on windows-latest
+       in CI; every test is a WindowsFact, so on the Mac the project builds and its tests report skipped. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWPF>true</UseWPF>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Spit.App.Tests</RootNamespace>
+    <!-- Spit.App publishes self-contained; the test host only needs its types, not its runtime
+         (NETSDK1151's documented escape for test projects). -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Microsoft.Testing.Platform, not VSTest, as in Spit.Core.Tests (global.json "test.runner"). -->
+    <PackageReference Include="xunit.v3" Version="4.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Spit.App/Spit.App.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

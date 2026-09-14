@@ -3,7 +3,7 @@
 
 
 
-A Sintra Labs Open Source dictation app for macOS: hold a hotkey, speak, release, and clean text lands at the cursor. Audio runs locally via WhisperKit (CoreML), text refinement and history live on the VPS, and no data leaves the Mac unencrypted.
+A Sintra Labs Open Source dictation app for macOS and Windows: hold a hotkey, speak, release, and clean text lands at the cursor. Speech is recognised on the device (WhisperKit on the Mac, whisper.cpp on Windows), text refinement and history live on the VPS, and nothing leaves the computer unencrypted.
 
 ## Architecture
 
@@ -33,13 +33,42 @@ A Sintra Labs Open Source dictation app for macOS: hold a hotkey, speak, release
 
 **Why this split:** everything latency-critical (hotkey, audio, ASR, paste) runs locally and works offline. The backend owns the only shared secret (Ollama API key), the team's history, and the dictionary. The wire carries text only — audio never leaves the Mac, transcripts never land on disk.
 
-## Status (2026-09-12)
+## Status (2026-09-13)
 
-- **Server:** live on the VPS (vps) behind Traefik; HTTPS for `voice.miraside.co` is live (Let’s Encrypt via Traefik).
-- **Mac app:** built through M5 and signed with an Apple Development identity (team `FZC6P6XRGD`). The designated requirement stays constant across rebuilds, which is what stops macOS re-asking for Accessibility, Input Monitoring and Microphone every time — `mac/scripts/package.sh` fails loudly rather than quietly falling back to ad-hoc signing.
-- **Tests:** 137 Mac unit tests and 81 server tests; 1 opt-in ASR integration test (`VOICE_ASR_TESTS=1`) — everything requiring a microphone or a permission grant is in the manual checklist below.
+Shipping to friends is built and verified as far as a machine without a person can take it, on branch `spit-mac-windows` ([pull request #1](https://github.com/mecls/spit/pull/1)). **Nothing is released yet**: no `v0.2.0` tag, no GitHub Release, no site deploy.
+
+| Part | State |
+|---|---|
+| **Server** | Live on the VPS behind Traefik; HTTPS for `voice.miraside.co` is live. Unchanged by the Windows work (81/81 tests). |
+| **Mac app** | Signed with the Apple Development identity (team `FZC6P6XRGD`); 143 unit tests, 1 opt-in ASR test skipped. `mac/scripts/package.sh` builds `Spit.dmg` (arm64, version 0.2.0) and `verify-dmg.sh` passes all 16 checks. Not notarised: macOS shows "Apple could not verify…" and friends use Open Anyway. |
+| **Windows app** | New client in `windows/` (.NET 10, WPF), default model Whisper small (264 MB). 213 platform-neutral tests (108 of them the Mac's, ported by name) plus Windows-only tests. CI on a GitHub Windows runner builds the whole UI, pastes into a real Notepad, transcribes a fixture with the shipped model (12.9 s for 12.5 s of audio, no GPU), packs `Spit-Setup.exe`, and installs, runs and uninstalls it. **Never run on a physical PC.** |
+| **`/spit` page** | Written at `SintraLabs/site/spit/index.html` and linked from the home page's Index — outside this repo, not deployed. |
+
+### What's missing
+
+In the order it should happen (details in `tasks/tasks-spit-mac-windows.md`):
+
+1. **Run the Windows build on a real PC** — the hotkey, the microphone and the bar have never had a real key press or a real voice. Download `Spit-Setup.exe` from the latest `windows-ci` run's artifacts and run the spikes:
+   - speed on your hardware;
+   - Right Ctrl / Right Alt / AltGr on a pt-PT keyboard, and whether Right Alt opens menus;
+   - pasting into Notepad run as administrator (CI runs elevated and cannot test it);
+   - Clipboard History (Win+V) never keeping a dictation;
+   - installing a newer build over an older one.
+2. **Manual checklists** for Mac and Windows (`tasks/prd-spit-mac-windows.md` §5), with screenshots of the Windows SmartScreen and Edge warnings to fill the marked placeholder on the `/spit` page.
+3. **Release 0.2.0:** merge PR #1 → push tag `v0.2.0` (CI drafts the release and attaches `Spit-Setup.exe`) → `mac/scripts/package.sh --release` (adds `Spit.dmg` and `SHA256SUMS.txt`) → check both downloads from the draft → publish. `release-windows.yml` has never run, because nothing has pushed a tag.
+4. **Deploy `site/`** and confirm `/spit` resolves; the download buttons 404 until the release is published.
+5. **Latency numbers** from 20 real Windows dictations (the SQL in the PRD §5).
+
+Known limitations and open items:
+
+- **Live transcription on Windows** (experimental, off by default) fell back to a full re-transcription on the CI clip: correct text, but 37 s instead of 12.9 s.
+- **Smart App Control** on Windows 11 blocks the unsigned installer outright; accepted, and the page says so.
+- **Admin windows:** the Windows hotkey and paste don't reach an app running as administrator (documented).
+- **Open question:** a spending ceiling for friends' text cleanup on the Ollama key.
 
 ## Install for teammates
+
+**Friends and teammates:** download `Spit.dmg` (Mac) or `Spit-Setup.exe` (Windows) from the `/spit` page on the Sintra Labs site, which walks through each OS's warning. Everything below is for building it yourself.
 
 ### A) From source (macOS 15+, Xcode 26)
 
@@ -133,7 +162,7 @@ cd server
 npm test
 ```
 
-Runs 47 unit tests on auth, routes, LLM errors, and the refine budget.
+Runs 81 tests on auth, routes, LLM errors, and the refine budget.
 
 **Mac tests:**
 ```bash
@@ -142,13 +171,32 @@ xcodegen generate
 xcodebuild test -project Voice.xcodeproj -scheme Voice -destination 'platform=macOS' -quiet
 ```
 
-Runs 39 unit tests on state machine, FIFO ordering, clipboard snapshots, hotkey interpretation, and text guards. To also run the opt-in WhisperKit ASR test (downloads the model):
+Runs 143 unit tests (1 opt-in ASR test skipped) on the state machine, FIFO ordering, clipboard snapshots, hotkey interpretation, and text guards. To also run the opt-in WhisperKit ASR test (downloads the model):
 ```bash
 VOICE_ASR_TESTS=1 xcodebuild test ...
 ```
+
+**Mac DMG:**
+```bash
+mac/scripts/package.sh             # tests, arm64 Release, signs, writes mac/build/Spit.dmg, runs verify-dmg.sh
+mac/scripts/package.sh --release   # refuses ad-hoc signing; uploads Spit.dmg + SHA256SUMS.txt to the vX.Y.Z draft
+```
+
+The version lives in the root `VERSION` file; `scripts/check-version.sh` fails when `mac/project.yml` or a tag disagrees.
+
+**Windows client (`windows/`, .NET 10):** `Spit.Core` holds the rules ported from the Mac and runs anywhere; `Spit.App` is the WPF shell and runs on Windows 10/11 x64.
+```bash
+dotnet test windows/Spit.Core.Tests        # the Mac's tests, ported by name (runs on macOS too)
+windows/scripts/parity-check.sh            # fails if a ported test class drifts from its Swift file
+dotnet build windows/Spit.sln              # compiles Spit.App on macOS as well (EnableWindowsTargeting)
+pwsh windows/scripts/pack.ps1              # Windows only: self-contained publish + Velopack → windows/Releases/Spit-Setup.exe
+```
+
+CI (`.github/workflows/windows-ci.yml`) runs the core tests on Linux and Windows, the Windows-only tests, packs the installer, transcribes a fixture with the real model, and installs/uninstalls it on a Windows runner; the installer is attached to each run as an artifact. Pushing a `vX.Y.Z` tag runs `release-windows.yml`, which attaches `Spit-Setup.exe` to a draft release.
 
 **Documentation:**
 - [docs/PLAN.md](docs/PLAN.md) — architecture, design decisions, latency budget, verification checklist.
 - [docs/API.md](docs/API.md) — server endpoint schemas and error handling.
 - [docs/PROMPT.md](docs/PROMPT.md) — the refine prompt and model selection rationale.
-- [docs/SPIKES.md](docs/SPIKES.md) — measurements: ASR latency, event tap behavior, Ollama tiers.
+- [docs/SPIKES.md](docs/SPIKES.md) — measurements: ASR latency (Mac and Windows), event tap behavior, Ollama tiers.
+- [tasks/prd-spit-mac-windows.md](tasks/prd-spit-mac-windows.md) — the spec for shipping on Mac and Windows; [tasks/tasks-spit-mac-windows.md](tasks/tasks-spit-mac-windows.md) — its task list and what is still open; [tasks/spit-mac-windows-build-spec.md](tasks/spit-mac-windows-build-spec.md) — the build brief and every decision taken during the build (§16).

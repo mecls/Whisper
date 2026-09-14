@@ -373,8 +373,11 @@ docs). Where no primary source exists, the rule names the spike in §5 that sett
 
     Done is enabled when Microphone and Hotkey are green, mirroring `OnboardingView`.
 
-41. **Speech engine: whisper.cpp through Whisper.net, with the same two model choices.**
-    - **Recommended:** "Large v3 Turbo (compressed, 574 MB)", `ggml-large-v3-turbo-q5_0.bin`.
+41. **Speech engine: whisper.cpp through Whisper.net. Whisper small is the Windows default** (decided 2026-09-13,
+    open question 3: large-v3-turbo took 53–85 s for 12.5 s of audio on a GPU-less 4-vCPU CI runner, and most
+    friends' PCs have no GPU). The Mac keeps large-v3-turbo on its Neural Engine; model-list parity is given up.
+    - **Recommended:** "Small (264 MB)", `ggml-small-q8_0.bin`.
+    - **More accurate, needs a fast PC:** "Large v3 Turbo (compressed, 574 MB)", `ggml-large-v3-turbo-q5_0.bin`.
     - **Maximum accuracy:** "Large v3 Turbo (full, 1.6 GB)", `ggml-large-v3-turbo.bin`.
     - **Download:** from `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/<file>` to a
       `.partial` file, checked against a SHA-256 pinned in code, then renamed. Only a file with its final
@@ -568,6 +571,13 @@ page's copy.
 14. Sleep and wake the PC, then lock and unlock: the hotkey still works (rule 29).
 15. Uninstall from Settings › Apps removes the program and leaves `%LOCALAPPDATA%\Miraside\Spit\`.
 
+### Interim measurements (CI, 2026-09-13)
+
+S1 cannot run without the PC; GitHub's `windows-latest` runner (4 vCPU, no GPU) gave a first reading on
+`mac/Fixtures/en.wav` (12,522 ms): large-v3-turbo q5_0 took 53–85 s (Vulkan and CPU runtimes identical, since Vulkan
+found no GPU); Whisper small q8_0 took 12.9 s. On that basis Whisper small became the Windows default (rule 41). Full
+readings are in `docs/SPIKES.md`.
+
 ### Numbers
 
 After 20 dictations of 10–12 s on the PC, with live transcription off:
@@ -598,6 +608,10 @@ Record p50 and p90 here, beside the Mac target of p50 ≤ 800 ms and p90 ≤ 120
 - **Crash reporting or telemetry** beyond what `/v1/dictations` already records.
 
 ## 7. Open questions
+
+**Answered by Miguel on 2026-09-13:** 1 — yes, `/spit` is a row in the home page's 03 Index. 2 — accept the Smart App
+Control block; no signing. 3 — Whisper small is the default and the recommendation on Windows (rule 41). 4 — keep
+Right Ctrl and Right Alt. 5 — Miguel deploys the site later. 6 is still open.
 
 1. **Is `/spit` linked from `site/index.html`** (for example a row in 03 Index), or shared only by URL?
    Decision 4B leaves the flagship section itself alone. *Miguel.*
