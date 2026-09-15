@@ -74,6 +74,8 @@ jobs:
           path: windows/Releases/Spit-Setup.exe
           if-no-files-found: error
 
+      # Caches are scoped by branch: a run reads its own branch's and main's, never another branch's. So the first
+      # run on main downloads even when every PR run hit the cache, and a main cache then serves all branches.
       - name: Restore the speech model
         id: model
         uses: actions/cache@v4
@@ -84,10 +86,17 @@ jobs:
       - name: Download the speech model
         if: steps.model.outputs.cache-hit != 'true'
         shell: pwsh
+        env:
+          # Optional. Hugging Face rate-limits anonymous downloads per IP and runners share IPs; a read token has
+          # its own, higher limit.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'spit-model'
           New-Item -ItemType Directory -Force $dir | Out-Null
-          Invoke-WebRequest "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$env:MODEL_FILE" -OutFile (Join-Path $dir $env:MODEL_FILE)
+          $headers = @{}
+          if ($env:HF_TOKEN) { $headers.Authorization = "Bearer $env:HF_TOKEN" }
+          # A 429 here is usually other people's traffic on the same runner IP: wait and retry rather than fail.
+          Invoke-WebRequest "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$env:MODEL_FILE" -OutFile (Join-Path $dir $env:MODEL_FILE) -Headers $headers -MaximumRetryCount 5 -RetryIntervalSec 30
 
       - name: Smoke test — transcribe a fixture with the published app (auto and CPU runtimes)
         timeout-minutes: 30
